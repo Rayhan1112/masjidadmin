@@ -2,6 +2,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class InAppMessageScreen extends StatefulWidget {
   const InAppMessageScreen({super.key});
@@ -13,8 +14,13 @@ class InAppMessageScreen extends StatefulWidget {
 class _InAppMessageScreenState extends State<InAppMessageScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  // In a real app, you'd use a package like image_picker to get an image file.
-  File? _image;
+  final _imagePicker = ImagePicker();
+  File? _imageFile;
+
+  // State for checkboxes
+  bool _includeTitle = true;
+  bool _includeDescription = true;
+  bool _includeImage = true;
 
   @override
   void initState() {
@@ -30,12 +36,19 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
     super.dispose();
   }
 
-  void _pickImage() {
-    // This is where you would implement image picking logic.
-    // For this example, we'll simulate picking by setting a placeholder.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Image selection is not implemented in this example.')),
-    );
+  Future<void> _pickImage() async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(source: ImageSource.gallery);
+      if (pickedFile != null) {
+        setState(() {
+          _imageFile = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick image: $e')),
+      );
+    }
   }
 
   @override
@@ -49,29 +62,50 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // --- Configuration Checkboxes ---
+            _buildConfigRow(
+              label: 'Include Title',
+              value: _includeTitle,
+              onChanged: (val) => setState(() => _includeTitle = val!),
+            ),
+            _buildConfigRow(
+              label: 'Include Description',
+              value: _includeDescription,
+              onChanged: (val) => setState(() => _includeDescription = val!),
+            ),
+            _buildConfigRow(
+              label: 'Include Image',
+              value: _includeImage,
+              onChanged: (val) => setState(() => _includeImage = val!),
+            ),
+            const SizedBox(height: 24),
+
             // --- Input Fields ---
-            TextFormField(
-              controller: _titleController,
-              decoration: const InputDecoration(labelText: 'Title'),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(labelText: 'Description'),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.image_outlined),
-              label: const Text('Select Image'),
-              onPressed: _pickImage,
-            ),
+            if (_includeTitle)
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Title'),
+              ),
+            if (_includeTitle) const SizedBox(height: 16),
+            if (_includeDescription)
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 3,
+              ),
+            if (_includeDescription) const SizedBox(height: 16),
+            if (_includeImage)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.image_outlined),
+                label: Text(_imageFile == null ? 'Select Image' : 'Change Image'),
+                onPressed: _pickImage,
+              ),
             const SizedBox(height: 32),
 
             // --- Preview Section ---
             Text(
               'PREVIEW',
-              style: Theme.of(context).textTheme.titleSmall,
+              style: Theme.of(context).textTheme.labelMedium,
             ),
             const Divider(height: 16),
             _buildPreview(),
@@ -79,9 +113,9 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
 
             ElevatedButton(
               onPressed: () {
-                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('In-app message sent!')),
-                  );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('In-app message sent!')),
+                );
               },
               child: const Text('Send Message'),
             ),
@@ -91,55 +125,77 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
     );
   }
 
-  // This widget builds the visual preview of the in-app message.
+  Widget _buildConfigRow(
+      {required String label, required bool value, required ValueChanged<bool?> onChanged}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.titleMedium),
+        Checkbox(value: value, onChanged: onChanged),
+      ],
+    );
+  }
+
   Widget _buildPreview() {
     final title = _titleController.text;
     final description = _descriptionController.text;
 
+    // Do not show the card if no elements are included and the fields are empty.
+    if ((!_includeTitle || title.isEmpty) &&
+        (!_includeDescription || description.isEmpty) &&
+        (!_includeImage || _imageFile == null)) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 48.0),
+          child: Text('Preview will appear here', style: TextStyle(color: Colors.grey)),
+        ),
+      );
+    }
+
     return Card(
       elevation: 4.0,
       clipBehavior: Clip.antiAlias,
-      margin: EdgeInsets.zero, // Remove default card margin
+      margin: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Image placeholder
-          Container(
-            height: 150,
-            color: Colors.grey[300],
-            child: _image != null
-                ? Image.file(_image!, fit: BoxFit.cover)
-                : const Center(
-                    child: Icon(
-                      Icons.photo_size_select_actual_outlined,
-                      color: Colors.black45,
-                      size: 48.0,
+          if (_includeImage)
+            Container(
+              height: 150,
+              color: Colors.grey[800],
+              child: _imageFile != null
+                  ? Image.file(_imageFile!, fit: BoxFit.cover)
+                  : const Center(
+                      child: Icon(
+                        Icons.photo_size_select_actual_outlined,
+                        color: Colors.white24,
+                        size: 48.0,
+                      ),
                     ),
-                  ),
-          ),
-          // Text content
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (title.isNotEmpty)
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                if (title.isNotEmpty && description.isNotEmpty) const SizedBox(height: 8),
-                if (description.isNotEmpty)
-                  Text(
-                    description,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-              ],
             ),
-          ),
+          if ((_includeTitle && title.isNotEmpty) || (_includeDescription && description.isNotEmpty))
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_includeTitle && title.isNotEmpty)
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  if (_includeTitle && title.isNotEmpty && _includeDescription && description.isNotEmpty)
+                    const SizedBox(height: 8),
+                  if (_includeDescription && description.isNotEmpty)
+                    Text(
+                      description,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                ],
+              ),
+            ),
         ],
       ),
     );
   }
 }
-
