@@ -1,0 +1,90 @@
+{
+  "project_info": {
+    "project_number": "339125530903",
+    "project_id": "masjid-a4e50",
+    "storage_bucket": "masjid-a4e50.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:339125530903:android:9475d3e4f0ae0c5b82c752",
+        "android_client_info": {
+          "package_name": "com.admin.masjidadmin"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "339125530903-ur98qhbc7kgl92oudrfe5b3f10ciavk9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAhlIyOe_4fF5B1nA6U5LPNdj6MkjhRCSQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "339125530903-ur98qhbc7kgl92oudrfe5b3f10ciavk9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "339125530903-d3dnr1u2mbnc1lcqgdrs0n9k0ia5isrd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.admin.masjidadmin"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:339125530903:android:358d36fcd932409f82c752",
+        "android_client_info": {
+          "package_name": "com.thesecurex.finalmasjid"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "339125530903-h69ll655bhor3889ctvqoumuokg02bk0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.thesecurex.finalmasjid",
+            "certificate_hash": "3589c9d096d02bb01555745eb38069f2a60890f9"
+          }
+        },
+        {
+          "client_id": "339125530903-ur98qhbc7kgl92oudrfe5b3f10ciavk9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAhlIyOe_4fF5B1nA6U5LPNdj6MkjhRCSQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "339125530903-ur98qhbc7kgl92oudrfe5b3f10ciavk9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "339125530903-d3dnr1u2mbnc1lcqgdrs0n9k0ia5isrd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.admin.masjidadmin"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

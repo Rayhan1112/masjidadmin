@@ -1,0 +1,33 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "masjid-a4e50",
+          "appId": "1:339125530903:android:9475d3e4f0ae0c5b82c752",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "masjid-a4e50",
+          "configurations": {
+            "android": "1:339125530903:android:9475d3e4f0ae0c5b82c752",
+            "ios": "1:339125530903:ios:31967ef17f995a2682c752",
+            "macos": "1:339125530903:ios:31967ef17f995a2682c752",
+            "web": "1:339125530903:web:1fbb935629f15f8282c752",
+            "windows": "1:339125530903:web:143b68c5888cb20182c752"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}

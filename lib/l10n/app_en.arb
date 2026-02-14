@@ -1,0 +1,18 @@
+{
+  "@@locale": "en",
+  "welcomeBack": "Welcome Back!",
+  "loginToYourAccount": "Login to your account",
+  "email": "Email",
+  "phone": "Phone",
+  "password": "Password",
+  "login": "Login",
+  "signInWithGoogle": "Sign in with Google",
+  "usePhoneInstead": "Use Phone Instead",
+  "useEmailInstead": "Use Email Instead",
+  "dontHaveAnAccount": "Don't have an account?",
+  "signUp": "Sign Up",
+  "language": "Language",
+  "createAnAccount": "Create an Account",
+  "getStartedWithYourAdminAccount": "Get started with your admin account",
+  "phoneNumber": "Phone Number"
+}

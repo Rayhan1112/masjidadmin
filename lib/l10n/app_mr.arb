@@ -1,0 +1,18 @@
+{
+  "@@locale": "mr",
+  "welcomeBack": "परत आल्याबद्दल स्वागत आहे!",
+  "loginToYourAccount": "तुमच्या खात्यात लॉग इन करा",
+  "email": "ईमेल",
+  "phone": "फोन",
+  "password": "पासवर्ड",
+  "login": "लॉग इन करा",
+  "signInWithGoogle": "Google सह साइन इन करा",
+  "usePhoneInstead": "फोन वापरा",
+  "useEmailInstead": "ईमेल वापरा",
+  "dontHaveAnAccount": "खाते नाही?",
+  "signUp": "साइन अप करा",
+  "language": "भाषा",
+  "createAnAccount": "खाते तयार करा",
+  "getStartedWithYourAdminAccount": "तुमच्या प्रशासक खात्यासह प्रारंभ करा",
+  "phoneNumber": "फोन नंबर"
+}

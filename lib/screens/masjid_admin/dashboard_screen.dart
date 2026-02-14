@@ -1,0 +1,421 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:masjidadmin/screens/super_admin/create_masjid_screen.dart';
+import 'package:masjidadmin/screens/masjid_admin/edit_details_screen.dart';
+import 'package:masjidadmin/screens/masjid_admin/edit_location_screen.dart';
+import 'package:masjidadmin/screens/masjid_admin/namaz_timings_screen.dart';
+
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final Completer<GoogleMapController> _mapControllerCompleter = Completer();
+  final String? _userId = FirebaseAuth.instance.currentUser?.uid;
+
+  String _masjidName = 'No Masjid Created';
+  String _adminName = 'Admin';
+  String _address = '';
+  LatLng _location = const LatLng(0, 0);
+  Map<String, dynamic> _prayerTimingsV2 = {};
+  bool _masjidExists = false;
+  bool _isLoadingData = true;
+
+  StreamSubscription? _masjidSubscription;
+  StreamSubscription? _adminSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_userId != null) {
+      _fetchData();
+    } else {
+      setState(() => _isLoadingData = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _masjidSubscription?.cancel();
+    _adminSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _fetchData() {
+    final masjidDoc = FirebaseFirestore.instance.collection('masjids').doc(_userId);
+    _masjidSubscription = masjidDoc.snapshots().listen((snapshot) async {
+      if (!mounted) return;
+
+      if (snapshot.exists) {
+        final data = snapshot.data()!;
+        LatLng newLocation = _location;
+        if (data.containsKey('latitude') && data.containsKey('longitude')) {
+          try {
+            newLocation = LatLng(double.parse(data['latitude']),
+                double.parse(data['longitude']));
+          } catch (e) {
+            // Handle parsing error
+          }
+        }
+
+        setState(() {
+          _masjidExists = true;
+          _masjidName = data['name'] ?? 'Masjid Name';
+          _address = data['address'] ?? '';
+          _location = newLocation;
+          _prayerTimingsV2 = data['prayer_timings_v2'] as Map<String, dynamic>? ?? {};
+          _isLoadingData = false;
+        });
+
+        if (_mapControllerCompleter.isCompleted) {
+          final GoogleMapController controller =
+              await _mapControllerCompleter.future;
+          controller.animateCamera(CameraUpdate.newCameraPosition(
+              CameraPosition(target: newLocation, zoom: 15)));
+        }
+      } else {
+        setState(() {
+          _masjidExists = false;
+          _masjidName = 'No Masjid Created';
+          _address = '';
+          _location = const LatLng(0, 0);
+          _prayerTimingsV2 = {};
+          _isLoadingData = false;
+        });
+      }
+    });
+
+    final adminDoc = FirebaseFirestore.instance.collection('admins').doc(_userId);
+    _adminSubscription = adminDoc.snapshots().listen((snapshot) {
+      if (snapshot.exists && mounted) {
+        final data = snapshot.data()!;
+        setState(() => _adminName = data['displayName'] ?? _adminName);
+      }
+    });
+  }
+
+  void _navigateToDetailsEditor() {
+    Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const EditDetailsScreen()));
+  }
+
+  void _navigateToTimingsEditor() {
+    Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const NamazTimingsScreen()));
+  }
+
+  void _navigateToLocationEditor() {
+    Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const EditLocationScreen()));
+  }
+
+  void _navigateToCreateMasjid() {
+    Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const CreateMasjidScreen()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F2F5),
+      appBar: AppBar(
+        title: Text(_masjidName),
+        centerTitle: true,
+      ),
+      body: _isLoadingData
+          ? const Center(child: CircularProgressIndicator())
+          : _masjidExists
+              ? _buildMasjidContent(Theme.of(context))
+              : _buildNoMasjidContent(Theme.of(context)),
+    );
+  }
+
+
+
+  Widget _buildMasjidContent(ThemeData theme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
+      child: Column(
+        children: [
+          _buildActionCards(theme),
+          const SizedBox(height: 25),
+          _buildTimingsCard(theme),
+          const SizedBox(height: 25),
+          _buildLocationCard(theme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionCards(ThemeData theme) {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildMiniActionCard(
+            theme,
+            'Edit Profile',
+            Icons.edit_note_rounded,
+            Colors.orange,
+            _navigateToDetailsEditor,
+          ),
+        ),
+        const SizedBox(width: 15),
+        Expanded(
+          child: _buildMiniActionCard(
+            theme,
+            'Edit Timings',
+            Icons.schedule_rounded,
+            Colors.indigo,
+            _navigateToTimingsEditor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMiniActionCard(ThemeData theme, String title, IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3)),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                title, 
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimingsCard(ThemeData theme) {
+    final List<String> prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha', 'Jummah'];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.access_time_filled_rounded, color: Colors.indigo),
+                    SizedBox(width: 10),
+                    Text('Prayer Timings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  ],
+                ),
+                TextButton(
+                  onPressed: _navigateToTimingsEditor,
+                  child: const Text('Update'),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(flex: 2, child: SizedBox()),
+                Expanded(child: Text('Azan', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold))),
+                Expanded(child: Text('Namaz', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold))),
+                Expanded(child: Text('Akhir', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold))),
+              ],
+            ),
+          ),
+          const Divider(height: 20),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Column(
+              children: prayers.map((p) => _buildTimingRowV2(p, theme)).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimingRowV2(String prayer, ThemeData theme) {
+    final timing = _prayerTimingsV2[prayer] as Map<String, dynamic>? ?? {};
+    final azan = _formatDisplayTime(timing['azan']);
+    final namaz = _formatDisplayTime(timing['iqamah']);
+    final akhir = _formatDisplayTime(timing['akhir']);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: Text(prayer, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+          Expanded(child: Text(azan, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
+          Expanded(child: Text(namaz, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: theme.primaryColor, fontWeight: FontWeight.bold))),
+          Expanded(child: Text(akhir, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.redAccent))),
+        ],
+      ),
+    );
+  }
+
+  String _formatDisplayTime(dynamic timeStr) {
+    if (timeStr == null || timeStr is! String || timeStr.isEmpty) return '--:--';
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length == 2) {
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        final period = hour < 12 ? 'AM' : 'PM';
+        final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+        return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
+      }
+    } catch (e) {
+      // ignore
+    }
+    return '--:--';
+  }
+
+  Widget _buildLocationCard(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.location_on_rounded, color: Colors.redAccent),
+                    SizedBox(width: 10),
+                    Text('Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  ],
+                ),
+                TextButton(
+                  onPressed: _navigateToLocationEditor,
+                  child: const Text('Edit'),
+                ),
+              ],
+            ),
+          ),
+          ClipRRect(
+            borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(25), bottomRight: Radius.circular(25)),
+            child: SizedBox(
+              height: 200,
+              width: double.infinity,
+              child: GoogleMap(
+                key: ValueKey(_location),
+                onMapCreated: (controller) {
+                  if (!_mapControllerCompleter.isCompleted) {
+                    _mapControllerCompleter.complete(controller);
+                  }
+                },
+                initialCameraPosition:
+                    CameraPosition(target: _location, zoom: 15),
+                markers: {
+                  Marker(
+                      markerId: const MarkerId('masjid_location'),
+                      position: _location)
+                },
+                zoomControlsEnabled: false,
+                mapToolbarEnabled: false,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                const Icon(Icons.pin_drop_outlined, size: 20, color: Colors.grey),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _address.isEmpty ? 'Loading address...' : _address,
+                    style: const TextStyle(fontSize: 14, color: Colors.black87),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoMasjidContent(ThemeData theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.mosque_outlined, size: 100, color: theme.primaryColor.withOpacity(0.2)),
+            const SizedBox(height: 30),
+            const Text(
+              'No Masjid Profile Found',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Please set up your masjid details and location to manage timings.',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton.icon(
+              onPressed: _navigateToCreateMasjid,
+              icon: const Icon(Icons.add_home_outlined),
+              label: const Text('Create Your Masjid'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

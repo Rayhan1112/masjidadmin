@@ -1,0 +1,42 @@
+name: masjidadmin
+description: "A new Flutter project."
+publish_to: 'none' 
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^3.15.2
+  firebase_auth: ^5.1.1
+  cloud_firestore: ^5.0.2
+  firebase_storage: ^12.0.1
+  firebase_database: ^11.0.2
+  cloud_functions: ^5.0.2
+  google_sign_in: ^6.2.1
+  image_picker: ^1.2.1
+  intl: ^0.19.0
+  google_maps_flutter: ^2.6.1
+  geolocator: ^12.0.0
+  geocoding: ^3.0.0
+  timeago: ^3.6.1 # Added for relative timestamps
+  
+  cupertino_icons: ^1.0.8
+  http: ^1.6.0
+  google_mlkit_text_recognition: ^0.15.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  generate: true
+
+  assets:
+    - assets/images/
