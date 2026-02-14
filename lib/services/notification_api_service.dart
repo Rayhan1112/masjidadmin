@@ -6,7 +6,7 @@ class NotificationApiService {
   // Use local server for development
   static String get baseUrl {
     // Use the hosted Render server for all modes as requested
-    return 'https://masjid-server.onrender.com/api/notifications';
+    return 'https://masjid-server-6461.onrender.com/api/notifications';
   }
   
   static const String apiKey = '';
