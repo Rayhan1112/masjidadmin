@@ -32,16 +32,27 @@ class _EditLocationScreenState extends State<EditLocationScreen> {
       return;
     }
 
-    final docRef = FirebaseFirestore.instance.collection('masjids').doc(user.uid);
-    final snapshot = await docRef.get();
+    try {
+      final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
+      String masjidId = user.uid;
+      if (adminDoc.exists) {
+        masjidId = adminDoc.data()?['masjidId'] ?? user.uid;
+      }
 
-    if (snapshot.exists && snapshot.data() != null) {
-      final data = snapshot.data()!;
-      _addressController.text = data['address'] ?? '';
-      _latitudeController.text = data['latitude'] ?? '';
-      _longitudeController.text = data['longitude'] ?? '';
+      final docRef = FirebaseFirestore.instance.collection('masjids').doc(masjidId);
+      final snapshot = await docRef.get();
+
+      if (snapshot.exists && snapshot.data() != null) {
+        final data = snapshot.data()!;
+        _addressController.text = data['address'] ?? '';
+        _latitudeController.text = data['latitude'] ?? '';
+        _longitudeController.text = data['longitude'] ?? '';
+      }
+    } catch (e) {
+      debugPrint("Load Location Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-    setState(() => _isLoading = false);
   }
 
   Future<void> _openMapPicker() async {
@@ -72,10 +83,14 @@ class _EditLocationScreenState extends State<EditLocationScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final docRef = FirebaseFirestore.instance.collection('masjids').doc(user.uid);
-
     try {
-      await docRef.update({
+      final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
+      String masjidId = user.uid;
+      if (adminDoc.exists) {
+        masjidId = adminDoc.data()?['masjidId'] ?? user.uid;
+      }
+
+      await FirebaseFirestore.instance.collection('masjids').doc(masjidId).update({
         'address': _addressController.text,
         'latitude': _latitudeController.text,
         'longitude': _longitudeController.text,

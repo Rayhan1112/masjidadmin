@@ -88,10 +88,18 @@ class _NamazTimingsScreenState extends State<NamazTimingsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    _masjidId = user.uid;
-
     try {
-      final docRef = FirebaseFirestore.instance.collection('masjids').doc(user.uid);
+      // 1. Get the Masjid ID linked to this admin
+      final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
+      if (adminDoc.exists) {
+        _masjidId = adminDoc.data()?['masjidId'];
+      }
+      
+      // Fallback for older accounts or direct UID linking
+      _masjidId ??= user.uid;
+
+      // 2. Load masjid timings
+      final docRef = FirebaseFirestore.instance.collection('masjids').doc(_masjidId);
       final snapshot = await docRef.get();
 
       if (snapshot.exists) {

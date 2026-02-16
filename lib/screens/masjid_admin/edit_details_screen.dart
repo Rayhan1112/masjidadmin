@@ -31,7 +31,13 @@ class _EditDetailsState extends State<EditDetailsScreen> {
     }
 
     try {
-      final docRef = FirebaseFirestore.instance.collection('masjids').doc(user.uid);
+      final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
+      String masjidId = user.uid;
+      if (adminDoc.exists) {
+        masjidId = adminDoc.data()?['masjidId'] ?? user.uid;
+      }
+
+      final docRef = FirebaseFirestore.instance.collection('masjids').doc(masjidId);
       final snapshot = await docRef.get();
 
       if (snapshot.exists && snapshot.data() != null) {
@@ -55,7 +61,13 @@ class _EditDetailsState extends State<EditDetailsScreen> {
     setState(() => _isSaving = true);
 
     try {
-      await FirebaseFirestore.instance.collection('masjids').doc(user.uid).update({
+      final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
+      String masjidId = user.uid;
+      if (adminDoc.exists) {
+        masjidId = adminDoc.data()?['masjidId'] ?? user.uid;
+      }
+
+      await FirebaseFirestore.instance.collection('masjids').doc(masjidId).update({
         'name': _nameController.text,
         'address': _addressController.text,
         'lastUpdated': FieldValue.serverTimestamp(),

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:masjidadmin/screens/masjid_admin/admin_home_screen.dart';
 import 'package:masjidadmin/auth_service.dart';
@@ -16,8 +17,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final AuthService _authService = AuthService();
   bool _isLoginWithEmail = true;
+  bool _isLoginWithId = false;
   bool _isLoading = false;
-  String? _email, _password, _phone;
+  String? _email, _password, _phone, _masjidId;
 
   @override
   Widget build(BuildContext context) {
@@ -54,9 +56,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       transitionBuilder: (child, animation) {
                         return FadeTransition(opacity: animation, child: child);
                       },
-                      child: _isLoginWithEmail
-                          ? _buildEmailField()
-                          : _buildPhoneField(),
+                      child: _isLoginWithId 
+                          ? _buildIdField()
+                          : (_isLoginWithEmail ? _buildEmailField() : _buildPhoneField()),
                     ),
                     const SizedBox(height: 16),
                     _buildPasswordField(),
@@ -96,22 +98,28 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextButton(
                           onPressed: () {
                             setState(() {
-                              _isLoginWithEmail = !_isLoginWithEmail;
+                              if (_isLoginWithId) {
+                                _isLoginWithId = false;
+                                _isLoginWithEmail = true;
+                              } else if (_isLoginWithEmail) {
+                                _isLoginWithEmail = false;
+                                _isLoginWithId = false;
+                              } else {
+                                _isLoginWithId = true;
+                              }
                             });
-                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(_isLoginWithEmail
-                                    ? 'Switched to login with Email'
-                                    : 'Switched to login with Phone'),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
                           },
-                          child: Text(_isLoginWithEmail
-                              ? 'Use Phone Instead'
-                              : 'Use Email Instead'),
+                          child: Text(_isLoginWithId 
+                            ? 'Use Email Instead' 
+                            : (_isLoginWithEmail ? 'Use Phone Instead' : 'Use ID Instead')),
                         ),
+                        if (!_isLoginWithId) ...[
+                          const Text("|"),
+                          TextButton(
+                            onPressed: () => setState(() => _isLoginWithId = true),
+                            child: const Text('Use ID Instead'),
+                          ),
+                        ]
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -174,6 +182,25 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Widget _buildIdField() {
+    return TextFormField(
+      key: const ValueKey('masjidId'),
+      decoration: InputDecoration(
+        labelText: 'Masjid ID (e.g. Sangli1)',
+        prefixIcon: const Icon(Icons.fingerprint_rounded),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please enter Masjid ID';
+        }
+        _masjidId = value;
+        return null;
+      },
+      keyboardType: TextInputType.text,
+    );
+  }
+
   Widget _buildPhoneField() {
     return TextFormField(
       key: const ValueKey('phone'),
@@ -211,43 +238,41 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-   void _login() async {
+    void _login() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
-        if (_isLoginWithEmail) {
-          final userCredential =
-              await _authService.signInWithEmailPassword(_email!, _password!);
-          if (userCredential != null) {
-            final user = userCredential.user;
-            if (user?.email == kSuperAdminEmail) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const SuperAdminScreen()),
-              );
-            } else {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const AdminHomeScreen()),
-              );
-            }
-          } else {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Login failed')));
-          }
+        User? user;
+        if (_isLoginWithId) {
+          user = await _authService.signInWithMasjidId(_masjidId!, _password!);
+        } else if (_isLoginWithEmail) {
+          final userCredential = await _authService.signInWithEmailPassword(_email!, _password!);
+          user = userCredential?.user;
         } else {
-          final user = await _authService.signInWithPhonePassword(_phone!, _password!);
-          if (user != null) {
-            // Phone login is for regular admins for now
+          user = await _authService.signInWithPhonePassword(_phone!, _password!);
+        }
+
+        if (user != null) {
+          if (user.email == kSuperAdminEmail) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const SuperAdminScreen()),
+            );
+          } else {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const AdminHomeScreen()),
             );
-          } else {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Login failed')));
           }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Login failed: Invalid credentials'), backgroundColor: Colors.red),
+          );
         }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
       } finally {
         if (mounted) {
           setState(() => _isLoading = false);

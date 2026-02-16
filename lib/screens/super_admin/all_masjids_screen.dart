@@ -11,12 +11,160 @@ class AllMasjidsScreen extends StatefulWidget {
 
 class _AllMasjidsScreenState extends State<AllMasjidsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _passwordController = TextEditingController();
   String _searchQuery = "";
+  bool _isCreating = false;
 
   @override
   void dispose() {
     _searchController.dispose();
+    _nameController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<String> _generateIncrementalId() async {
+    final snapshot = await FirebaseFirestore.instance.collection('masjids').get();
+    int maxNum = 0;
+    final regex = RegExp(r'^Sangli(\d+)$');
+    
+    for (var doc in snapshot.docs) {
+      final match = regex.firstMatch(doc.id);
+      if (match != null) {
+        final num = int.tryParse(match.group(1)!);
+        if (num != null && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+    return 'Sangli${maxNum + 1}';
+  }
+
+  Future<void> _createMasjid() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isCreating = true);
+
+    try {
+      final masjidId = await _generateIncrementalId();
+      final docRef = FirebaseFirestore.instance.collection('masjids').doc(masjidId);
+      
+      final doc = await docRef.get();
+      if (doc.exists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: Masjid ID already exists!'), backgroundColor: Colors.red),
+          );
+        }
+        setState(() => _isCreating = false);
+        return;
+      }
+
+      await docRef.set({
+        'name': _nameController.text.trim(),
+        'id': masjidId,
+        'password': _passwordController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'address': 'Address not set yet',
+        'latitude': '0',
+        'longitude': '0',
+      });
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Masjid created with ID: $masjidId'), backgroundColor: Colors.green),
+        );
+      }
+      _nameController.clear();
+      _passwordController.clear();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error creating masjid: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
+  }
+
+  void _showCreateDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Row(
+            children: [
+              Icon(Icons.add_business_rounded, color: Color(0xFF4A90E2)),
+              SizedBox(width: 12),
+              Text('Create New Masjid', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: _inputDecoration("Masjid Name", Icons.mosque),
+                    validator: (v) => v!.isEmpty ? 'Name is required' : null,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text("ID will be auto-generated (e.g. Sangli1, Sangli2)", 
+                    style: TextStyle(fontSize: 10, color: Color(0xFF4A90E2), fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    decoration: _inputDecoration("Access Password", Icons.lock_outline),
+                    obscureText: true,
+                    validator: (v) => v!.length < 6 ? 'Password must be at least 6 chars' : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: _isCreating ? null : () async {
+                setDialogState(() => _isCreating = true);
+                await _createMasjid();
+                setDialogState(() => _isCreating = false);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A90E2),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: _isCreating 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                : const Text('CREATE'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: const Color(0xFF4A90E2), size: 20),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Color(0xFF4A90E2))),
+    );
   }
 
   @override
@@ -28,6 +176,12 @@ class _AllMasjidsScreenState extends State<AllMasjidsScreen> {
         
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFC),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: _showCreateDialog,
+            backgroundColor: const Color(0xFF4A90E2),
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: const Text('ADD MASJID', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
           body: Padding(
             padding: EdgeInsets.all(padding),
             child: Column(
@@ -198,15 +352,22 @@ class _AllMasjidsScreenState extends State<AllMasjidsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        data['name'] ?? 'Unknown Masjid',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold, 
-                          fontSize: isCompact ? 14 : 17,
-                          color: const Color(0xFF1E293B),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          data['name'] ?? 'Unknown Masjid',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold, 
+                            fontSize: isCompact ? 14 : 17,
+                            color: const Color(0xFF1E293B),
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "ID: ${data['id'] ?? masjidId}",
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF4A90E2)),
                       ),
                       const SizedBox(height: 4),
                       Row(

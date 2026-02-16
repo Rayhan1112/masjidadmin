@@ -56,7 +56,7 @@ class AuthService {
       return null;
     }
   }
-   Future<User?> signInWithPhonePassword(String phone, String password) async {
+  Future<User?> signInWithPhonePassword(String phone, String password) async {
     try {
       // Find user by phone number in Firestore
       QuerySnapshot querySnapshot = await _firestore
@@ -80,6 +80,44 @@ class AuthService {
       return null;
     } catch (e) {
       print(e); // Handle errors appropriately
+      return null;
+    }
+  }
+
+  Future<User?> signInWithMasjidId(String mid, String password) async {
+    try {
+      // 1. Check if masjid exists with this ID and Password
+      final doc = await _firestore.collection('masjids').doc(mid).get();
+      if (!doc.exists) return null;
+      
+      final data = doc.data()!;
+      if (data['password'] != password) return null;
+
+      // 2. Sign in or Sign up into Firebase Auth using dummy email
+      final email = '${mid.toLowerCase()}@masjid.com';
+      UserCredential? userCredential;
+      try {
+        userCredential = await _auth.signInWithEmailAndPassword(email: email, password: password);
+      } catch (e) {
+        // If user doesn't exist in Auth, create it
+        userCredential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      }
+
+      final user = userCredential.user;
+      if (user != null) {
+        // 3. Link this UID to the MasjidID in admins collection
+        await _firestore.collection('admins').doc(user.uid).set({
+          'uid': user.uid,
+          'email': email,
+          'masjidId': mid,
+          'lastLogin': FieldValue.serverTimestamp(),
+          'displayName': data['name'] ?? 'Masjid Admin',
+        }, SetOptions(merge: true));
+        return user;
+      }
+      return null;
+    } catch (e) {
+      debugPrint("Masjid Login Error: $e");
       return null;
     }
   }

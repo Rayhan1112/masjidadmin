@@ -48,7 +48,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _fetchData() {
-    final masjidDoc = FirebaseFirestore.instance.collection('masjids').doc(_userId);
+    final adminDoc = FirebaseFirestore.instance.collection('admins').doc(_userId);
+    _adminSubscription = adminDoc.snapshots().listen((adminSnapshot) {
+      if (!mounted) return;
+      
+      if (adminSnapshot.exists) {
+        final adminData = adminSnapshot.data()!;
+        setState(() => _adminName = adminData['displayName'] ?? 'Admin');
+        
+        final masjidId = adminData['masjidId'];
+        if (masjidId != null) {
+          _fetchMasjidData(masjidId);
+        } else {
+          // If logged in via email/phone and NOT linked to a masjid yet
+          // In your current system, UID was being used as masjidId.
+          // Let's fallback to UID if no masjidId linked.
+          _fetchMasjidData(_userId!);
+        }
+      } else {
+         setState(() {
+          _adminName = 'Admin';
+          _isLoadingData = false;
+        });
+      }
+    });
+  }
+
+  void _fetchMasjidData(String masjidId) {
+    _masjidSubscription?.cancel();
+    final masjidDoc = FirebaseFirestore.instance.collection('masjids').doc(masjidId);
     _masjidSubscription = masjidDoc.snapshots().listen((snapshot) async {
       if (!mounted) return;
 
@@ -57,10 +85,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         LatLng newLocation = _location;
         if (data.containsKey('latitude') && data.containsKey('longitude')) {
           try {
-            newLocation = LatLng(double.parse(data['latitude']),
-                double.parse(data['longitude']));
+            newLocation = LatLng(double.parse(data['latitude'].toString()),
+                double.parse(data['longitude'].toString()));
           } catch (e) {
-            // Handle parsing error
+            debugPrint("Location Parse Error: $e");
           }
         }
 
@@ -74,8 +102,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
 
         if (_mapControllerCompleter.isCompleted) {
-          final GoogleMapController controller =
-              await _mapControllerCompleter.future;
+          final GoogleMapController controller = await _mapControllerCompleter.future;
           controller.animateCamera(CameraUpdate.newCameraPosition(
               CameraPosition(target: newLocation, zoom: 15)));
         }
@@ -88,14 +115,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _prayerTimingsV2 = {};
           _isLoadingData = false;
         });
-      }
-    });
-
-    final adminDoc = FirebaseFirestore.instance.collection('admins').doc(_userId);
-    _adminSubscription = adminDoc.snapshots().listen((snapshot) {
-      if (snapshot.exists && mounted) {
-        final data = snapshot.data()!;
-        setState(() => _adminName = data['displayName'] ?? _adminName);
       }
     });
   }
