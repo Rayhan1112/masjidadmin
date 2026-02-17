@@ -57,6 +57,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
             }, SetOptions(merge: true));
 
             // Subscribe super admin to alerts topic
+            debugPrint('[AuthWrapper] Subscribing Super Admin to alerts topic...');
             FCMService.subscribeToSuperAdminAlerts();
             return const SuperAdminScreen();
           } else {

@@ -188,13 +188,9 @@ class FCMService {
     
     try {
       await _messaging.subscribeToTopic('super_admin_alerts');
-      if (kDebugMode) {
-        print('Subscribed to super_admin_alerts');
-      }
+      debugPrint('[FCMService] successfully subscribed to topic: super_admin_alerts');
     } catch (e) {
-      if (kDebugMode) {
-        print('Error subscribing to super_admin_alerts: $e');
-      }
+      debugPrint('[FCMService] Error subscribing to super_admin_alerts: $e');
     }
   }
 
