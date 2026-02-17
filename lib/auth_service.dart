@@ -46,8 +46,12 @@ class AuthService {
       if (user != null) {
         // Store phone and password hash in Firestore
         await _firestore.collection('users').doc(user.uid).set({
+          'uid': user.uid,
           'phone': phone,
           'password': password, // In a real app, hash this password
+          'type': 'user',
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastLogin': FieldValue.serverTimestamp(),
         });
         return user;
       }

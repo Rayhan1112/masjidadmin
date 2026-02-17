@@ -45,63 +45,75 @@ class SuperAdminSidebar extends StatelessWidget {
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
+                  icon: Icons.analytics_rounded,
+                  label: 'Analytics',
+                  index: 1,
+                  colorScheme: colorScheme,
+                ),
+                _buildNavItem(
+                  icon: Icons.person_search_rounded,
+                  label: 'Users List',
+                  index: 2,
+                  colorScheme: colorScheme,
+                ),
+                _buildNavItem(
                   icon: Icons.rule_folder_rounded,
                   label: 'Approvals',
-                  index: 1,
+                  index: 3, // index bumped
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
                   icon: Icons.mosque_rounded,
                   label: 'All Masjids',
-                  index: 2,
+                  index: 4, // index bumped
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
                   icon: Icons.people_alt_rounded,
                   label: 'All Admins',
-                  index: 3,
+                  index: 5, // index bumped
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
                   icon: Icons.notifications_active_rounded,
                   label: 'Notifications',
-                  index: 4,
+                  index: 6, // index bumped
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
                   icon: Icons.mark_chat_unread_rounded,
                   label: 'Messages',
-                  index: 5,
+                  index: 7, // index bumped
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
                   icon: Icons.campaign_rounded,
                   label: 'Ads Management',
-                  index: 6,
+                  index: 8, // index bumped
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
                   icon: Icons.calendar_month_rounded,
                   label: 'Ramzan Calendar',
-                  index: 7,
+                  index: 9, // index bumped
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
                   icon: Icons.fastfood_rounded,
                   label: 'Tiffin Orders',
-                  index: 8,
+                  index: 10, // index bumped
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
                   icon: Icons.tune_rounded,
                   label: 'App Settings',
-                  index: 9,
+                  index: 11, // index bumped
                   colorScheme: colorScheme,
                 ),
                 _buildNavItem(
                   icon: Icons.bug_report_rounded,
                   label: 'Failure Logs',
-                  index: 10,
+                  index: 12, // index bumped
                   colorScheme: colorScheme,
                 ),
 

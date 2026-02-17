@@ -92,7 +92,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
                       children: [
                         _buildStatsGrid(),
                         const SizedBox(height: 30),
-                        _buildSectionHeader("Registration Highlights", onTap: () => widget.onNavigate?.call(2)),
+                        _buildSectionHeader("Registration Highlights", onTap: () => widget.onNavigate?.call(4)),
                         const SizedBox(height: 15),
                         _buildRecentMasjidsList(),
                       ],

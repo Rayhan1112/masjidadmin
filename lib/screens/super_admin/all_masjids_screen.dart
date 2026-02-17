@@ -4,7 +4,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:masjidadmin/screens/masjid_admin/masjid_details_screen.dart';
 
 class AllMasjidsScreen extends StatefulWidget {
-  const AllMasjidsScreen({super.key});
+  final bool showAppBar;
+  const AllMasjidsScreen({super.key, this.showAppBar = false});
 
   @override
   State<AllMasjidsScreen> createState() => _AllMasjidsScreenState();
@@ -254,6 +255,15 @@ class _AllMasjidsScreenState extends State<AllMasjidsScreen> {
         
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFC),
+          appBar: widget.showAppBar 
+            ? AppBar(
+                title: const Text('All Masjids', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF1E293B),
+                elevation: 0,
+                centerTitle: true,
+              )
+            : null,
           floatingActionButton: FloatingActionButton.extended(
             onPressed: _showCreateDialog,
             backgroundColor: const Color(0xFF4A90E2),
