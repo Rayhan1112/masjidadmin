@@ -628,7 +628,6 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('ads')
-          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -639,7 +638,17 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
         }
 
         final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
+        
+        // Sort in memory to avoid index issues
+        final sortedDocs = List<QueryDocumentSnapshot>.from(docs);
+        sortedDocs.sort((a, b) {
+          final timeA = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+          final timeB = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+          if (timeA == null || timeB == null) return 0;
+          return timeB.compareTo(timeA); // Descending
+        });
+
+        if (sortedDocs.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -655,10 +664,10 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
 
         return ListView.separated(
           padding: EdgeInsets.all(isSmall ? 16 : 24),
-          itemCount: docs.length,
+          itemCount: sortedDocs.length,
           separatorBuilder: (_, __) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
-            final doc = docs[index];
+            final doc = sortedDocs[index];
             final data = doc.data() as Map<String, dynamic>;
             final type = data['type'] ?? 'text';
 
@@ -676,8 +685,8 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
                       width: 100,
                       height: 100,
                       color: const Color(0xFFF8FAFC),
-                      child: type == 'image'
-                          ? Image.network(data['imageUrl'], fit: BoxFit.cover)
+                      child: type == 'image' && data['imageUrl'] != null
+                          ? Image.network(data['imageUrl'], fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.broken_image))
                           : const Center(
                               child: Icon(Icons.text_fields_rounded, color: Color(0xFF6366F1))),
                     ),

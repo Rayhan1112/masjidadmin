@@ -3,23 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class NotificationApiService {
-  // Use local server for development
-  // TOGGLE THIS FOR LOCAL TESTING (set to false before releasing to stores)
-  static const bool _useLocal = true;
-
-  static String get baseUrl {
-    if (_useLocal) {
-      // Logic to handle different platforms for local testing
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-        // 10.0.2.2 is the special alias for your host machine in Android Emulator
-        return 'http://10.0.2.2:4000/api/notifications';
-      }
-      // For iOS Simulator, Web, or Desktop 'localhost' works
-      return 'http://localhost:4000/api/notifications';
-    }
-    // Use the hosted Render server for production
-    return 'https://masjid-server-6461.onrender.com/api/notifications';
-  }
+  // Hosted Render server for production
+  static const String baseUrl = 'https://masjid-server-6461.onrender.com/api/notifications';
   
   static const String apiKey = '';
 
@@ -50,6 +35,10 @@ class NotificationApiService {
     }
 
     try {
+      if (kDebugMode) {
+        print('Sending notification to: $url');
+        print('Payload: ${jsonEncode(payload)}');
+      }
       final response = await http.post(
         url,
         headers: {

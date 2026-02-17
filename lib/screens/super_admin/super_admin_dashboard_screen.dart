@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:masjidadmin/screens/super_admin/approval_queue_screen.dart';
 
 class SuperAdminDashboardScreen extends StatefulWidget {
   final Function(int)? onNavigate;
@@ -17,6 +18,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
   int _totalAdmins = 0;
   int _totalMasjids = 0;
   int _totalNotifications = 0;
+  int _pendingApprovals = 0;
   bool _isLoading = true;
   String _adminName = "Super Admin";
 
@@ -47,6 +49,16 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
             .where('status', isEqualTo: 'sent')
             .count()
             .get(),
+        db
+            .collection('notification_requests')
+            .where('status', isEqualTo: 'waiting_approval')
+            .count()
+            .get(),
+        db
+            .collection('in_app_messages')
+            .where('status', isEqualTo: 'waiting_approval')
+            .count()
+            .get(),
       ]);
 
       if (mounted) {
@@ -54,6 +66,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
           _totalAdmins = results[0].count ?? 0;
           _totalMasjids = results[1].count ?? 0;
           _totalNotifications = results[2].count ?? 0;
+          _pendingApprovals = (results[3].count ?? 0) + (results[4].count ?? 0);
           _isLoading = false;
         });
       }
@@ -79,7 +92,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
                       children: [
                         _buildStatsGrid(),
                         const SizedBox(height: 30),
-                        _buildSectionHeader("Registration Highlights", onTap: () => widget.onNavigate?.call(1)),
+                        _buildSectionHeader("Registration Highlights", onTap: () => widget.onNavigate?.call(2)),
                         const SizedBox(height: 15),
                         _buildRecentMasjidsList(),
                       ],
@@ -100,19 +113,30 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
           width: double.maxFinite,
           height: 400,
           child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('ads').orderBy('createdAt', descending: true).snapshots(),
+            stream: FirebaseFirestore.instance.collection('ads').snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               final docs = snapshot.data!.docs;
-              if (docs.isEmpty) return const Center(child: Text("No ads found"));
+              
+              // Sort in memory
+              final sortedDocs = List<QueryDocumentSnapshot>.from(docs);
+              sortedDocs.sort((a, b) {
+                final timeA = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                final timeB = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                if (timeA == null || timeB == null) return 0;
+                return timeB.compareTo(timeA);
+              });
+
+              if (sortedDocs.isEmpty) return const Center(child: Text("No ads found"));
 
               return ListView.builder(
-                itemCount: docs.length,
+                itemCount: sortedDocs.length,
                 itemBuilder: (context, index) {
-                  final doc = docs[index];
+                  final doc = sortedDocs[index];
                   final data = doc.data() as Map<String, dynamic>;
                   final type = data['type'] ?? 'text';
                   final isActive = data['isActive'] ?? false;
+                  final imageUrl = data['imageUrl'];
 
                   return ListTile(
                     leading: Container(
@@ -122,8 +146,8 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
                         color: Colors.grey[200],
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: type == 'image' 
-                        ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(data['imageUrl'], fit: BoxFit.cover))
+                      child: type == 'image' && imageUrl != null
+                        ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.broken_image)))
                         : const Icon(Icons.text_fields, size: 20),
                     ),
                     title: Text(type == 'image' ? "Image Ad" : (data['content'] ?? "Text Ad"), maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -158,6 +182,16 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
           spacing: spacing,
           runSpacing: spacing,
           children: [
+            SizedBox(
+              width: cardWidth,
+              child: _buildStatCard(
+                "Approvals",
+                _pendingApprovals.toString(),
+                Icons.rule_folder_rounded,
+                _pendingApprovals > 0 ? const [Color(0xFF8B5CF6), Color(0xFFA78BFA)] : const [Color(0xFF94A3B8), Color(0xFFCBD5E1)],
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ApprovalQueueScreen())),
+              ),
+            ),
             SizedBox(
               width: cardWidth,
               child: _buildStatCard(

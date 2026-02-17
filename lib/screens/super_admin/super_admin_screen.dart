@@ -13,6 +13,7 @@ import 'package:masjidadmin/screens/super_admin/ramzan_calendar_screen.dart';
 import 'package:masjidadmin/screens/super_admin/tiffin_orders_screen.dart';
 import 'package:masjidadmin/screens/super_admin/app_settings_screen.dart';
 import 'package:masjidadmin/screens/super_admin/failure_logs_screen.dart';
+import 'package:masjidadmin/screens/super_admin/approval_queue_screen.dart';
 
 class SuperAdminScreen extends StatefulWidget {
   const SuperAdminScreen({super.key});
@@ -108,7 +109,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
               TextButton(
                 onPressed: () {
                   ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  _onItemTapped(7); // Index of Tiffin Orders screen
+                  _onItemTapped(8); // Updated index for Tiffin Orders screen
                 },
                 child: const Text(
                   "VIEW",
@@ -127,6 +128,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
 
   static const List<String> _titles = <String>[
     'Dashboard',
+    'Approvals',
     'All Masjids',
     'All Admins',
     'Notifications',
@@ -148,6 +150,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
   Widget build(BuildContext context) {
     final List<Widget> widgetOptions = [
       SuperAdminDashboardScreen(onNavigate: _onItemTapped),
+      const ApprovalQueueScreen(),
       const AllMasjidsScreen(),
       const AllAdminsScreen(),
       const NotificationSenderScreen(),

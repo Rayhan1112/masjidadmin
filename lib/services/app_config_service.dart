@@ -108,8 +108,9 @@ class AppConfigService {
       TabConfig(id: 'masjids', label: 'Masjids', icon: 'mosque', order: 1),
       TabConfig(id: 'jumma', label: 'Jumma', icon: 'calendar', order: 2),
       TabConfig(id: 'sehri', label: 'Sehri', icon: 'restaurant', order: 3),
-      TabConfig(id: 'alerts', label: 'Alerts', icon: 'notifications', order: 4, isVisible: true),
-      TabConfig(id: 'profile', label: 'Profile', icon: 'person', order: 5),
+      TabConfig(id: 'alerts', label: 'Alerts', icon: 'notifications', order: 4),
+      TabConfig(id: 'messages', label: 'Billboard', icon: 'billboard', order: 5),
+      TabConfig(id: 'profile', label: 'Profile', icon: 'person', order: 6),
     ];
   }
 }

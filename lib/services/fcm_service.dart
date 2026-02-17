@@ -51,7 +51,7 @@ class FCMService {
         'High Priority Alerts', // Name
         description: 'Used for important tiffin orders and urgent alerts.',
         importance: Importance.max,
-        vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500, 200, 1000]),
+        vibrationPattern: Int64List.fromList([0, 1000]),
         enableVibration: true,
         playSound: true,
       );
@@ -77,10 +77,7 @@ class FCMService {
       // Strong haptic vibration for EVERY foreground message
       bool? hasVibrator = await Vibration.hasVibrator();
       if (hasVibrator == true) {
-        Vibration.vibrate(
-          pattern: [0, 500, 100, 500, 100, 500, 100, 1000],
-          intensities: [0, 255, 0, 255, 0, 255, 0, 255],
-        );
+        Vibration.vibrate(duration: 1000);
       }
 
       if (message.notification != null) {
@@ -106,7 +103,7 @@ class FCMService {
           importance: Importance.max,
           priority: Priority.max,
           ticker: 'ticker',
-          vibrationPattern: kIsWeb ? null : Int64List.fromList([0, 500, 200, 500, 200, 500, 200, 1000]),
+          vibrationPattern: kIsWeb ? null : Int64List.fromList([0, 1000]),
           enableVibration: true,
           fullScreenIntent: true,
         ),

@@ -94,29 +94,47 @@ class _NotificationSenderScreenState extends State<NotificationSenderScreen> {
           ? _selectedMasjidId
           : user.uid;
 
-      // 1. Log to Firestore for history
-      await _notificationsRef.add({
-        'title': _titleController.text,
-        'body': _bodyController.text,
-        'target': _selectedTarget,
-        'masjidId': masjidId,
-        'sentBy': user.uid,
-        'sentAt': FieldValue.serverTimestamp(),
-        'status': 'sent',
-      });
+      // Logic: If Super Admin, send directly. If Masjid Admin, send for approval.
+      if (_isSuperAdmin) {
+        // 1. Log to Firestore for history
+        await _notificationsRef.add({
+          'title': _titleController.text,
+          'body': _bodyController.text,
+          'target': _selectedTarget,
+          'masjidId': masjidId,
+          'sentBy': user.uid,
+          'sentAt': FieldValue.serverTimestamp(),
+          'status': 'sent',
+        });
 
-      // 2. Immediate Delivery via API
-      await _apiService.sendNotification(
-        title: _titleController.text,
-        body: _bodyController.text,
-        target: _selectedTarget,
-        masjidId: masjidId,
-      );
+        // 2. Immediate Delivery via API
+        await _apiService.sendNotification(
+          title: _titleController.text,
+          body: _bodyController.text,
+          target: _selectedTarget,
+          masjidId: masjidId,
+        );
+      } else {
+        // Masjid Admin Flow: Send for Approval
+        await _notificationsRef.add({
+          'title': _titleController.text,
+          'body': _bodyController.text,
+          'target': _selectedTarget,
+          'masjidId': masjidId,
+          'requestedBy': user.uid,
+          'masjidName': 'Masjid Admin', // Optional: could fetch real name
+          'requestedAt': FieldValue.serverTimestamp(),
+          'status': 'waiting_approval',
+          'type': 'notification',
+        });
+      }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            backgroundColor: Color(0xFF10B981),
-            content: Text('Notification broadcasted successfully!')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            content: Text(_isSuperAdmin 
+                ? 'Notification broadcasted successfully!' 
+                : 'Sent to Super Admin for approval.')));
         _titleController.clear();
         _bodyController.clear();
       }

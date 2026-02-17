@@ -11,6 +11,7 @@ import 'package:path/path.dart' as path;
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:masjidadmin/services/notification_api_service.dart';
 import 'package:masjidadmin/constants.dart';
+import 'package:hijri/hijri_calendar.dart';
 
 class InAppMessageScreen extends StatefulWidget {
   const InAppMessageScreen({super.key});
@@ -132,11 +133,12 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
         'title': _titleController.text,
         'description': _descriptionController.text,
         'imageUrl': imageUrl,
-        'status': 'unseen',
+        'status': _isSuperAdmin ? 'unseen' : 'waiting_approval',
         'date': formattedDate,
         'time': formattedTime,
         'timestamp': FieldValue.serverTimestamp(),
         'target': _selectedTarget,
+        'type': 'in_app_message',
       };
 
       if (_selectedTarget == 'masjid_follower') {
@@ -154,12 +156,21 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
         messageData['topic'] = 'masjid_$targetMasjidId';
       }
 
-      // Save ONLY to Firestore for in-app display (NO push notification)
+      if (!_isSuperAdmin) {
+        messageData['requestedBy'] = user.uid;
+        messageData['requestedAt'] = FieldValue.serverTimestamp();
+      }
+
+      // Save to Firestore
       await _inAppMessagesRef.add(messageData);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Message sent successfully!')));
+            SnackBar(
+              backgroundColor: const Color(0xFF10B981), 
+              content: Text(_isSuperAdmin ? 'Message sent successfully!' : 'Sent to Super Admin for approval.')
+            )
+        );
         _titleController.clear();
         _descriptionController.clear();
         setState(() {
@@ -217,6 +228,21 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
     });
   }
 
+  void _useAchiBaatTemplate() {
+    final now = DateTime.now();
+    final hijri = HijriCalendar.now();
+    final formattedDate = DateFormat('d MMMM y').format(now);
+    final hijriDate = "${hijri.hDay} ${hijri.longMonthName} ${hijri.hYear} AH";
+
+    _titleController.text = "Aaj ki Achi Baat";
+    _descriptionController.text = "📅 Date: $formattedDate\n🌙 Hijri: $hijriDate\n\n✨ ";
+
+    setState(() {
+      _isCustomMode = true;
+      _image = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -225,18 +251,25 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
 
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFC),
-          body: SingleChildScrollView(
-            padding: EdgeInsets.all(isSmall ? 16 : 24),
-            child: Center(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 900),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildComposerCard(isSmall),
-                    const SizedBox(height: 40),
-                    _buildHistorySection(),
-                  ],
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(isSmall ? 16 : 24),
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_isCustomMode) ...[
+                        _buildBackButton(),
+                        const SizedBox(height: 20),
+                        _buildComposerCard(isSmall),
+                      ] else
+                        _buildTemplateSelection(isSmall),
+                      const SizedBox(height: 40),
+                      _buildHistorySection(),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -246,48 +279,7 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
     );
   }
 
-  Widget _buildHeader(bool isSmall) {
-    return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 16,
-        bottom: 20,
-        left: 20,
-        right: 20,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF6366F1).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF6366F1), size: 24),
-          ),
-          const SizedBox(width: 16),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "In-App Messages",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-              ),
-              Text(
-                "Post messages directly to user home feed",
-                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildBackButton() {
     return InkWell(
@@ -317,30 +309,26 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
       children: [
         _buildSectionTitle("Daily Inspiration"),
         const SizedBox(height: 16),
-        if (isSmall)
-          Column(
-            children: [
-              _buildTemplateCard("Daily Hadith", "Share wisdom with users", Icons.menu_book_rounded, const Color(0xFFF59E0B), 
-                () => _useTemplate("Daily Hadith", "The Prophet (ﷺ) said: 'The best among you are those who have the best manners and character.'")),
-              _buildTemplateCard("Jummah Mubarak", "Weekly Friday greetings", Icons.mosque_rounded, const Color(0xFF6366F1),
-                () => _useTemplate("Jummah Mubarak", "Jummah Mubarak! Don't forget to read Surah Al-Kahf and send Durood.")),
-              _buildTemplateCard("Special Event", "Invite to masjid gatherings", Icons.event_note_rounded, const Color(0xFF10B981),
-                () => _useTemplate("Masjid Event", "Join us for a special lecture this weekend after Isha.")),
-            ],
-          )
-        else
-          Row(
-            children: [
-              Expanded(child: _buildTemplateCard("Daily Hadith", "Share wisdom", Icons.menu_book_rounded, const Color(0xFFF59E0B), 
+        // Row 1
+        Row(
+          children: [
+            Expanded(child: _buildTemplateCard("Achi Baat", "Wisdom & Hijri Date", Icons.lightbulb_outline_rounded, const Color(0xFF10B981),
+                () => _useAchiBaatTemplate())),
+            const SizedBox(width: 16),
+            Expanded(child: _buildTemplateCard("Daily Hadith", "Share wisdom", Icons.menu_book_rounded, const Color(0xFFF59E0B), 
                 () => _useTemplate("Daily Hadith", "The Prophet (ﷺ) said: 'The best among you are those who have the best manners and character.'"))),
-              const SizedBox(width: 16),
-              Expanded(child: _buildTemplateCard("Jummah Mubarak", "Friday greetings", Icons.mosque_rounded, const Color(0xFF6366F1),
+          ],
+        ),
+        // Row 2
+        Row(
+          children: [
+            Expanded(child: _buildTemplateCard("Jummah", "Friday greetings", Icons.mosque_rounded, const Color(0xFF6366F1),
                 () => _useTemplate("Jummah Mubarak", "Jummah Mubarak! Don't forget to read Surah Al-Kahf and send Durood."))),
-              const SizedBox(width: 16),
-              Expanded(child: _buildTemplateCard("Special Event", "Gathetings", Icons.event_note_rounded, const Color(0xFF10B981),
-                () => _useTemplate("Masjid Event", "Join us for a special lecture this weekend after Isha."))),
-            ],
-          ),
+            const SizedBox(width: 16),
+            Expanded(child: _buildTemplateCard("Alert", "Announcements", Icons.campaign_rounded, const Color(0xFFEF4444), 
+                () => _useTemplate("Important Announcement", "Please take note of this important update from the Masjid administration."))),
+          ],
+        ),
         const SizedBox(height: 24),
         _buildCustomDraftCard(),
       ],

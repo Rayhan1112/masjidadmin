@@ -5,6 +5,7 @@ import 'package:masjidadmin/screens/masjid_admin/dashboard_screen.dart';
 import 'package:masjidadmin/screens/common/profile_screen.dart';
 import 'package:masjidadmin/screens/masjid_admin/namaz_timings_screen.dart';
 import 'package:masjidadmin/screens/common/notification_sender_screen.dart';
+import 'package:masjidadmin/screens/common/in_app_message_screen.dart';
 import 'package:masjidadmin/screens/super_admin/all_masjids_screen.dart';
 import 'package:masjidadmin/screens/super_admin/ramzan_calendar_screen.dart';
 import 'package:masjidadmin/services/app_config_service.dart';
@@ -55,6 +56,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       case 'notifications':
       case 'alerts':
         return const NotificationSenderScreen();
+      case 'messages':
+        return const InAppMessageScreen();
       case 'profile':
         return const ProfileScreen();
       default:
@@ -79,8 +82,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         List<TabConfig> visibleTabs;
 
         if (_userRole == 'masjidAdmin') {
-          // RESTRICTED VIEW: Only Home (Edit) and Profile
-          visibleTabs = allTabs.where((t) => t.id == 'home' || t.id == 'profile').toList();
+          // Masjid Admin View: Home, Alerts, Billboard, Profile
+          visibleTabs = allTabs.where((t) => 
+            t.id == 'home' || 
+            t.id == 'alerts' || 
+            t.id == 'messages' || 
+            t.id == 'profile'
+          ).toList();
         } else {
           // NORMAL VIEW for regular users or others
           visibleTabs = allTabs.where((t) => t.isVisible).toList();
@@ -136,6 +144,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         return active ? Icons.restaurant : Icons.restaurant_outlined;
       case 'notifications':
         return active ? Icons.notifications : Icons.notifications_none_rounded;
+      case 'billboard':
+        return active ? Icons.art_track : Icons.art_track_outlined;
       case 'person':
         return active ? Icons.person : Icons.person_outline;
       default:
