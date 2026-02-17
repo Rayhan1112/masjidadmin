@@ -164,6 +164,16 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
       // Save to Firestore
       await _inAppMessagesRef.add(messageData);
 
+      if (!_isSuperAdmin) {
+        // Alert Super Admin
+        await _notificationApi.sendToTopic(
+          topic: 'super_admin_alerts',
+          title: 'New Billboard Approval Requested',
+          body: 'A masjid admin has posted a new billboard message: "${_titleController.text}"',
+          data: {'click_action': 'FLUTTER_NOTIFICATION_CLICK', 'screen': 'approvals'},
+        );
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

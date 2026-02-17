@@ -127,6 +127,14 @@ class _NotificationSenderScreenState extends State<NotificationSenderScreen> {
           'status': 'waiting_approval',
           'type': 'notification',
         });
+
+        // 3. Alert Super Admin
+        await _apiService.sendToTopic(
+          topic: 'super_admin_alerts',
+          title: 'New Notification Approval Requested',
+          body: 'A masjid admin has requested a notification to be broadcast: "${_titleController.text}"',
+          data: {'click_action': 'FLUTTER_NOTIFICATION_CLICK', 'screen': 'approvals'},
+        );
       }
 
       if (mounted) {

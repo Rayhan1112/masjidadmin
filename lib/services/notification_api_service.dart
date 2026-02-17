@@ -23,7 +23,10 @@ class NotificationApiService {
       'data': data ?? {},
     };
 
-    if (target == 'masjid_followers' || target == 'masjid' || target == 'masjid_follower') {
+    if (topic != null) {
+      url = Uri.parse('$baseUrl/send/topic');
+      payload['topic'] = topic;
+    } else if (target == 'masjid_followers' || target == 'masjid' || target == 'masjid_follower') {
       url = Uri.parse('$baseUrl/send/masjid');
       payload['MasjidId'] = masjidId;
     } else if (target == 'all_users') {
@@ -56,6 +59,21 @@ class NotificationApiService {
     } catch (e) {
       throw Exception('Error connecting to server: $e');
     }
+  }
+
+  Future<Map<String, dynamic>> sendToTopic({
+    required String topic,
+    required String title,
+    required String body,
+    Map<String, dynamic>? data,
+  }) async {
+    return sendNotification(
+      title: title,
+      body: body,
+      target: 'topic',
+      topic: topic,
+      data: data,
+    );
   }
 
   Future<Map<String, dynamic>> testRamzanNotification() async {
