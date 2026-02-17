@@ -69,6 +69,7 @@ class _NamazTimingsScreenState extends State<NamazTimingsScreen> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isInitialSetup = false;
   String? _masjidId;
   String _masjidName = '';
 
@@ -90,7 +91,7 @@ class _NamazTimingsScreenState extends State<NamazTimingsScreen> {
 
     try {
       // 1. Get the Masjid ID linked to this admin
-      final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
+      final adminDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       if (adminDoc.exists) {
         _masjidId = adminDoc.data()?['masjidId'];
       }
@@ -108,6 +109,7 @@ class _NamazTimingsScreenState extends State<NamazTimingsScreen> {
 
         final timingsData = data['prayer_timings_v2'] as Map<String, dynamic>?;
         if (timingsData != null) {
+          _isInitialSetup = false;
           setState(() {
             for (var name in _prayerNames) {
               if (timingsData.containsKey(name)) {
@@ -116,9 +118,11 @@ class _NamazTimingsScreenState extends State<NamazTimingsScreen> {
             }
           });
         } else {
+          _isInitialSetup = true;
           // Fallback to old format if exist
           final oldTimings = data['prayerTimes'] as String?;
           if (oldTimings != null && oldTimings.isNotEmpty) {
+            _isInitialSetup = false; // Has old data, maybe not initial setup
             final times = oldTimings.split(',');
             setState(() {
               for (int i = 0; i < times.length && i < _prayerNames.length; i++) {
@@ -192,10 +196,23 @@ class _NamazTimingsScreenState extends State<NamazTimingsScreen> {
     );
 
     if (picked != null) {
+      TimeOfDay finalTime = picked;
+      
+      // Mandatory AM for Fajr, PM for others
+      if (prayerName == 'Fajr') {
+        if (finalTime.hour >= 12) {
+          finalTime = finalTime.replacing(hour: finalTime.hour - 12);
+        }
+      } else {
+        if (finalTime.hour < 12) {
+          finalTime = finalTime.replacing(hour: finalTime.hour + 12);
+        }
+      }
+
       setState(() {
-        if (type == 'azan') _prayerTimings[prayerName]?.azan = picked;
-        if (type == 'iqamah') _prayerTimings[prayerName]?.iqamah = picked;
-        if (type == 'akhir') _prayerTimings[prayerName]?.akhir = picked;
+        if (type == 'azan') _prayerTimings[prayerName]?.azan = finalTime;
+        if (type == 'iqamah') _prayerTimings[prayerName]?.iqamah = finalTime;
+        if (type == 'akhir') _prayerTimings[prayerName]?.akhir = finalTime;
       });
     }
   }
@@ -230,9 +247,13 @@ class _NamazTimingsScreenState extends State<NamazTimingsScreen> {
 
       await FirebaseFirestore.instance.collection('masjids').doc(_masjidId).update(updateData);
 
-      if (changedPrayers.isNotEmpty) {
+      // Only notify if it's NOT the very first time they are setting up the masjid
+      if (!_isInitialSetup && changedPrayers.isNotEmpty) {
         await _sendNotification(changedPrayers);
       }
+
+      // After first save, it's no longer initial setup
+      _isInitialSetup = false;
 
       // Update original timings
       _prayerTimings.forEach((key, value) {

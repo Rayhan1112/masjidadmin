@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MasjidDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> masjidData;
@@ -12,64 +13,118 @@ class MasjidDetailsScreen extends StatelessWidget {
     required this.masjidId,
   });
 
+  Future<void> _openInMaps(double lat, double lng) async {
+    final Uri url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      throw Exception('Could not launch $url');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final timings = masjidData['prayer_timings_v2'] as Map<String, dynamic>? ?? {};
-    final LatLng location = LatLng(
-      double.tryParse(masjidData['latitude'] ?? '0') ?? 0,
-      double.tryParse(masjidData['longitude'] ?? '0') ?? 0,
-    );
+    final double lat = double.tryParse(masjidData['latitude']?.toString() ?? '0') ?? 0;
+    final double lng = double.tryParse(masjidData['longitude']?.toString() ?? '0') ?? 0;
+    final LatLng location = LatLng(lat, lng);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: SingleChildScrollView(
-            child: Padding(
+      appBar: AppBar(
+        title: Text(masjidData['name'] ?? 'Masjid Details', 
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1E293B),
+        elevation: 0,
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildAddressSection(
-                      masjidData['address'] ?? 'No address provided'),
+                      context,
+                      masjidData['address'] ?? 'No address provided',
+                      lat,
+                      lng),
                   const SizedBox(height: 25),
                   const Text('Prayer Timings',
                       style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
                   const SizedBox(height: 15),
                   _buildTimingsTable(timings, theme),
                   const SizedBox(height: 30),
                   const Text('Location Map',
                       style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
                   const SizedBox(height: 15),
                   _buildMapSection(location),
                   const SizedBox(height: 50),
                 ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildAddressSection(String address) {
+  Widget _buildAddressSection(BuildContext context, String address, double lat, double lng) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
       ),
-      child: Row(
+      child: Column(
         children: [
-          const Icon(Icons.location_on_rounded, color: Colors.redAccent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(address, style: const TextStyle(fontSize: 15, height: 1.4)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Address", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Text(address, style: const TextStyle(fontSize: 15, height: 1.4, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _openInMaps(lat, lng),
+              icon: const Icon(Icons.directions_rounded),
+              label: const Text("LOCATE ON GOOGLE MAPS"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A90E2),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                elevation: 0,
+              ),
+            ),
           ),
         ],
       ),
@@ -155,9 +210,11 @@ class MasjidDetailsScreen extends StatelessWidget {
           markers: {
             Marker(markerId: const MarkerId('masjid_loc'), position: location),
           },
-          zoomControlsEnabled: false,
-          myLocationButtonEnabled: false,
-          scrollGesturesEnabled: false,
+          zoomControlsEnabled: true,
+          myLocationEnabled: true,
+          myLocationButtonEnabled: true,
+          scrollGesturesEnabled: true,
+          mapToolbarEnabled: true,
         ),
       ),
     );

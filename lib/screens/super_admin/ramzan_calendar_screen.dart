@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/notification_api_service.dart';
 
 class CalendarDay {
   final int day;
@@ -36,9 +37,11 @@ class _RamzanCalendarScreenState extends State<RamzanCalendarScreen> {
   void initState() {
     super.initState();
     _initializeDays();
+    _fetchCalendarData();
   }
 
   void _initializeDays() {
+    // Current year's Ramzan start date (approx Feb 19, 2026)
     DateTime start = DateTime(2026, 2, 19);
     DateTime end = DateTime(2026, 3, 20); 
     
@@ -50,6 +53,32 @@ class _RamzanCalendarScreenState extends State<RamzanCalendarScreen> {
 
     _sehriControllers = List.generate(_days.length, (i) => TextEditingController());
     _iftarControllers = List.generate(_days.length, (i) => TextEditingController());
+  }
+
+  Future<void> _fetchCalendarData() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('settings').doc('ramzan_calendar').get();
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data['schedule'] != null) {
+          final List<dynamic> schedule = data['schedule'];
+          
+          setState(() {
+            for (var item in schedule) {
+              int dayIndex = (item['day'] as int) - 1;
+              if (dayIndex >= 0 && dayIndex < _days.length) {
+                _sehriControllers[dayIndex].text = item['sehri'] ?? "";
+                _iftarControllers[dayIndex].text = item['iftar'] ?? "";
+                _days[dayIndex].sehri = item['sehri'] ?? "";
+                _days[dayIndex].iftar = item['iftar'] ?? "";
+              }
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching calendar data: $e");
+    }
   }
 
   @override
@@ -182,6 +211,27 @@ class _RamzanCalendarScreenState extends State<RamzanCalendarScreen> {
     }
   }
 
+  Future<void> _sendTestNotification() async {
+    try {
+      final service = NotificationApiService();
+      final result = await service.testRamzanNotification();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF6366F1),
+            content: Text("Test sent: ${result['phraseAtRuntime']}"),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: Colors.redAccent, content: Text("Test failed: $e")),
+        );
+      }
+    }
+  }
+
   Widget _buildCalendarTable(bool isSmall) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,11 +249,21 @@ class _RamzanCalendarScreenState extends State<RamzanCalendarScreen> {
                   Text("Manage Sehri & Iftar schedules", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6366F1))),
                 ],
               ),
-             TextButton.icon(
-              onPressed: _clearAll,
-              icon: const Icon(Icons.delete_sweep_rounded, size: 18, color: Colors.redAccent),
-              label: const Text("CLEAR ALL", style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-            ),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: _sendTestNotification,
+                    icon: const Icon(Icons.notification_important_rounded, size: 18, color: Color(0xFF6366F1)),
+                    label: const Text("TEST ALERT", style: TextStyle(color: Color(0xFF6366F1), fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: _clearAll,
+                    icon: const Icon(Icons.delete_sweep_rounded, size: 18, color: Colors.redAccent),
+                    label: const Text("CLEAR ALL", style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
           ],
         ),
         const SizedBox(height: 16),
@@ -248,6 +308,15 @@ class _RamzanCalendarScreenState extends State<RamzanCalendarScreen> {
                           Expanded(
                             child: _buildTimeInput("Iftar", _iftarControllers[index], false),
                           ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () => _testDay(index + 1),
+                            icon: const Icon(Icons.send_rounded, size: 20, color: Color(0xFF6366F1)),
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFF6366F1).withOpacity(0.08),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -259,6 +328,28 @@ class _RamzanCalendarScreenState extends State<RamzanCalendarScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _testDay(int day) async {
+    try {
+      final service = NotificationApiService();
+      await service.testDayRozaNotification(day);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF6366F1),
+            content: Text("Day $day Test Sent: 5m Alert & Dua"),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: Colors.redAccent, content: Text("Failed: $e")),
+        );
+      }
+    }
   }
 
   Widget _buildTimeInput(String label, TextEditingController controller, bool isSehri) {

@@ -16,8 +16,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final AuthService _authService = AuthService();
-  bool _isLoginWithEmail = true;
-  bool _isLoginWithId = false;
+  bool _isLoginWithId = true;
   bool _isLoading = false;
   String? _email, _password, _phone, _masjidId;
 
@@ -37,38 +36,33 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Welcome Back!',
+                      'Masjid Management',
                       style: Theme.of(context)
                           .textTheme
                           .headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                          ?.copyWith(fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Login to your account',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      'Admin Secure Login',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey[600]),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 40),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(opacity: animation, child: child);
-                      },
-                      child: _isLoginWithId 
-                          ? _buildIdField()
-                          : (_isLoginWithEmail ? _buildEmailField() : _buildPhoneField()),
-                    ),
+                    const SizedBox(height: 48),
+                    _isLoginWithId ? _buildIdField() : _buildPhoneField(),
                     const SizedBox(height: 16),
                     _buildPasswordField(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 32),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: const Color(0xFF4A90E2),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(15),
                         ),
+                        elevation: 0,
                       ),
                       onPressed: _isLoading ? null : _login,
                       child: _isLoading 
@@ -77,81 +71,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: 20,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
-                          : const Text('Login'),
+                          : const Text('LOG IN', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
                     ),
                     const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.g_mobiledata),
-                      label: const Text('Sign in with Google'),
-                      onPressed: _isLoading ? null : _googleSignIn,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              if (_isLoginWithId) {
-                                _isLoginWithId = false;
-                                _isLoginWithEmail = true;
-                              } else if (_isLoginWithEmail) {
-                                _isLoginWithEmail = false;
-                                _isLoginWithId = false;
-                              } else {
-                                _isLoginWithId = true;
-                              }
-                            });
-                          },
-                          child: Text(_isLoginWithId 
-                            ? 'Use Email Instead' 
-                            : (_isLoginWithEmail ? 'Use Phone Instead' : 'Use ID Instead')),
-                        ),
-                        if (!_isLoginWithId) ...[
-                          const Text("|"),
-                          TextButton(
-                            onPressed: () => setState(() => _isLoginWithId = true),
-                            child: const Text('Use ID Instead'),
-                          ),
-                        ]
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text("Don't have an account?"),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                                context,
-                                PageRouteBuilder(
-                                  pageBuilder: (context, animation,
-                                          secondaryAnimation) =>
-                                      const SignupScreen(),
-                                  transitionsBuilder: (context, animation,
-                                      secondaryAnimation, child) {
-                                    const begin = Offset(1.0, 0.0);
-                                    const end = Offset.zero;
-                                    const curve = Curves.ease;
-                                    var tween = Tween(begin: begin, end: end)
-                                        .chain(CurveTween(curve: curve));
-                                    return SlideTransition(
-                                      position: animation.drive(tween),
-                                      child: child,
-                                    );
-                                  },
-                                ));
-                          },
-                          child: const Text("Sign Up"),
-                        ),
-                      ],
+                    TextButton(
+                      onPressed: () => setState(() => _isLoginWithId = !_isLoginWithId),
+                      child: Text(_isLoginWithId ? 'Use Phone Number Instead' : 'Use Masjid ID Instead'),
                     ),
                   ],
                 ),
@@ -205,13 +130,13 @@ class _LoginScreenState extends State<LoginScreen> {
     return TextFormField(
       key: const ValueKey('phone'),
       decoration: InputDecoration(
-        labelText: 'Phone',
-        prefixIcon: const Icon(Icons.phone_outlined),
+        labelText: 'Phone Number',
+        prefixIcon: const Icon(Icons.phone_rounded),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return 'Please enter your phone number';
+          return 'Please enter Phone Number';
         }
         _phone = value;
         return null;
@@ -220,14 +145,20 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  bool _showPassword = false;
+
   Widget _buildPasswordField() {
     return TextFormField(
       decoration: InputDecoration(
         labelText: 'Password',
         prefixIcon: const Icon(Icons.lock_outline),
+        suffixIcon: IconButton(
+          icon: Icon(_showPassword ? Icons.visibility : Icons.visibility_off),
+          onPressed: () => setState(() => _showPassword = !_showPassword),
+        ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      obscureText: true,
+      obscureText: !_showPassword,
       validator: (value) {
         if (value == null || value.isEmpty) {
           return 'Please enter your password';
@@ -244,10 +175,13 @@ class _LoginScreenState extends State<LoginScreen> {
       try {
         User? user;
         if (_isLoginWithId) {
-          user = await _authService.signInWithMasjidId(_masjidId!, _password!);
-        } else if (_isLoginWithEmail) {
-          final userCredential = await _authService.signInWithEmailPassword(_email!, _password!);
-          user = userCredential?.user;
+          // Check if this is an email login using the ID field (Super Admin case)
+          if (_masjidId!.contains('@')) {
+            final userCredential = await _authService.signInWithEmailPassword(_masjidId!, _password!);
+            user = userCredential?.user;
+          } else {
+            user = await _authService.signInWithMasjidId(_masjidId!, _password!);
+          }
         } else {
           user = await _authService.signInWithPhonePassword(_phone!, _password!);
         }

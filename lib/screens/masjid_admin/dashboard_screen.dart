@@ -48,7 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _fetchData() {
-    final adminDoc = FirebaseFirestore.instance.collection('admins').doc(_userId);
+    final adminDoc = FirebaseFirestore.instance.collection('users').doc(_userId);
     _adminSubscription = adminDoc.snapshots().listen((adminSnapshot) {
       if (!mounted) return;
       

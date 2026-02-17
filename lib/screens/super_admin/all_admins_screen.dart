@@ -86,7 +86,7 @@ class _AllAdminsScreenState extends State<AllAdminsScreen> {
 
   Widget _buildAdminsList(double screenWidth) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('admins').snapshots(),
+      stream: FirebaseFirestore.instance.collection('users').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Text("Error: ${snapshot.error}"));
@@ -95,7 +95,12 @@ class _AllAdminsScreenState extends State<AllAdminsScreen> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        var docs = snapshot.data!.docs;
+        var docs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final type = data['type'];
+          // Show masjid admins and super admins
+          return type == 'masjidAdmin' || type == 'superAdmin' || type == null;
+        }).toList();
 
         // Client-side filtering
         if (_searchQuery.isNotEmpty) {
@@ -129,13 +134,13 @@ class _AllAdminsScreenState extends State<AllAdminsScreen> {
               crossAxisCount: 2,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              childAspectRatio: 3.5,
+              childAspectRatio: 3.0,
             ),
             itemCount: docs.length,
             itemBuilder: (context, index) {
               final doc = docs[index];
               final data = doc.data() as Map<String, dynamic>;
-              return _buildAdminCard(data, screenWidth);
+              return _buildAdminCard(data, screenWidth, doc.id);
             },
           );
         }
@@ -146,14 +151,137 @@ class _AllAdminsScreenState extends State<AllAdminsScreen> {
           itemBuilder: (context, index) {
             final doc = docs[index];
             final data = doc.data() as Map<String, dynamic>;
-            return _buildAdminCard(data, screenWidth);
+            return _buildAdminCard(data, screenWidth, doc.id);
           },
         );
       },
     );
   }
 
-  Widget _buildAdminCard(Map<String, dynamic> data, double screenWidth) {
+  Future<void> _deleteAdmin(String uid, Map<String, dynamic> data) async {
+    final String? masjidId = data['masjidId'];
+    String? masjidName;
+
+    if (masjidId != null) {
+      final masjidDoc = await FirebaseFirestore.instance.collection('masjids').doc(masjidId).get();
+      if (masjidDoc.exists) {
+        masjidName = masjidDoc.data()?['name'];
+      }
+    }
+
+    final String? choice = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(masjidId != null ? Icons.warning_amber_rounded : Icons.delete_forever, 
+                 color: masjidId != null ? Colors.orange : Colors.red),
+            const SizedBox(width: 10),
+            Text(masjidId != null ? "Linked Account" : "Delete Admin?"),
+          ],
+        ),
+        content: Text(masjidId != null 
+          ? "This admin is linked to: ${masjidName ?? masjidId}.\n\nWhat would you like to delete?"
+          : "Are you sure you want to remove this administrator?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, 'cancel'), child: const Text("CANCEL")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'user'), 
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: Text(masjidId != null ? "DELETE USER ONLY" : "DELETE ADMIN"),
+          ),
+          if (masjidId != null)
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, 'both'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+              child: const Text("DELETE MASJID & USER"),
+            ),
+        ],
+      ),
+    );
+
+    if (choice == 'user' || choice == 'both') {
+      try {
+        if (choice == 'both' && masjidId != null) {
+          await FirebaseFirestore.instance.collection('masjids').doc(masjidId).delete();
+        }
+        await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(choice == 'both' ? "Masjid and Admin deleted" : "Admin deleted successfully"), 
+              backgroundColor: Colors.green
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Failed to delete: $e"), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  void _showEditDialog(Map<String, dynamic> data, String uid) {
+    final nameController = TextEditingController(text: data['displayName']);
+    final phoneController = TextEditingController(text: data['phone']);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Edit Admin Details", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: _inputDecoration("Name", Icons.person_outline),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: phoneController,
+              decoration: _inputDecoration("Phone", Icons.phone_android_rounded),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+          ElevatedButton(
+            onPressed: () async {
+              await FirebaseFirestore.instance.collection('users').doc(uid).update({
+                'displayName': nameController.text.trim(),
+                'phone': phoneController.text.trim(),
+              });
+              if (mounted) Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A90E2),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text("UPDATE"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: const Color(0xFF4A90E2), size: 20),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+    );
+  }
+
+  Widget _buildAdminCard(Map<String, dynamic> data, double screenWidth, String uid) {
     final bool isCompact = screenWidth < 400;
     final String name = data['displayName'] ?? 'Unknown';
     final String firstLetter = name.isNotEmpty ? name[0].toUpperCase() : '?';
@@ -242,6 +370,21 @@ class _AllAdminsScreenState extends State<AllAdminsScreen> {
                     ),
                 ],
               ),
+            ),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  onPressed: () => _showEditDialog(data, uid),
+                  icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
+                  tooltip: "Edit Info",
+                ),
+                IconButton(
+                  onPressed: () => _deleteAdmin(uid, data),
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                  tooltip: "Delete Admin",
+                ),
+              ],
             ),
           ],
         ),

@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:masjidadmin/services/notification_api_service.dart';
 import 'package:masjidadmin/constants.dart';
 
 class InAppMessageScreen extends StatefulWidget {
@@ -25,9 +26,10 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
   XFile? _image;
   final ImagePicker _picker = ImagePicker();
 
-  String _selectedTarget = 'masjid_topic';
+  String _selectedTarget = 'masjid_follower';
   bool _isLoading = false;
   bool _isCustomMode = false;
+  final _notificationApi = NotificationApiService();
 
   final CollectionReference _inAppMessagesRef =
       FirebaseFirestore.instance.collection('in_app_messages');
@@ -137,9 +139,12 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
         'target': _selectedTarget,
       };
 
-      if (_selectedTarget == 'masjid_topic') {
+      if (_selectedTarget == 'masjid_follower') {
         if (_isSuperAdmin && _selectedMasjidId == null) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a masjid.')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Please select a masjid.'),
+            backgroundColor: Colors.orange,
+          ));
           setState(() => _isLoading = false);
           return;
         }
@@ -149,6 +154,7 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
         messageData['topic'] = 'masjid_$targetMasjidId';
       }
 
+      // Save ONLY to Firestore for in-app display (NO push notification)
       await _inAppMessagesRef.add(messageData);
 
       if (mounted) {
@@ -205,47 +211,35 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
   void _useTemplate(String title, String body) {
     _titleController.text = title;
     _descriptionController.text = body;
-    setState(() => _isCustomMode = true);
+    setState(() {
+      _isCustomMode = true;
+      _image = null; // Clear previous image when starting from template
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final double width = constraints.maxWidth;
-        final bool isSmall = width < 600;
+        final bool isSmall = constraints.maxWidth < 600;
 
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFC),
-          body: Column(
-            children: [
-              _buildHeader(isSmall),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.all(isSmall ? 16 : 24),
-                  child: Center(
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 900),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (!_isCustomMode) _buildTemplateSelection(isSmall),
-                          if (_isCustomMode) ...[
-                            _buildBackButton(),
-                            const SizedBox(height: 20),
-                            _buildSendSection(isSmall),
-                          ],
-                          const SizedBox(height: 40),
-                          _buildHistoryHeader(),
-                          const SizedBox(height: 16),
-                          _buildRecentHistory(isSmall),
-                        ],
-                      ),
-                    ),
-                  ),
+          body: SingleChildScrollView(
+            padding: EdgeInsets.all(isSmall ? 16 : 24),
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 900),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildComposerCard(isSmall),
+                    const SizedBox(height: 40),
+                    _buildHistorySection(),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         );
       },
@@ -281,7 +275,7 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "In-App Billboard",
+                "In-App Messages",
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
               ),
               Text(
@@ -436,7 +430,7 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
     );
   }
 
-  Widget _buildSendSection(bool isSmall) {
+  Widget _buildComposerCard(bool isSmall) {
     return Container(
       padding: EdgeInsets.all(isSmall ? 20 : 32),
       decoration: BoxDecoration(
@@ -451,54 +445,134 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionTitle("Destination"),
+            const Text(
+              "AUDIENCE",
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.2),
+            ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: _selectedTarget,
-              decoration: _inputDecoration("Target Group", Icons.people_rounded),
+              decoration: _inputDecoration("Target Group", Icons.people_alt_rounded),
               items: const [
-                DropdownMenuItem(value: 'masjid_topic', child: Text('Masjid Followers')),
-                DropdownMenuItem(value: 'all_users', child: Text('All System Users')),
+                DropdownMenuItem(value: 'masjid_follower', child: Text('Masjid Followers')),
+                DropdownMenuItem(value: 'all_users', child: Text('All App Users')),
               ],
-              onChanged: (String? newValue) {
-                if (newValue != null) setState(() => _selectedTarget = newValue);
-              },
+              onChanged: (v) => setState(() => _selectedTarget = v!),
             ),
-            if (_isSuperAdmin && _selectedTarget == 'masjid_topic') ...[
+            if (_isSuperAdmin && _selectedTarget == 'masjid_follower') ...[
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedMasjidId,
-                isExpanded: true,
-                hint: const Text('Select target Masjid'),
-                decoration: _inputDecoration("Target Masjid", Icons.mosque_rounded),
-                items: _masjids.map((masjid) {
-                  return DropdownMenuItem<String>(value: masjid['id'], child: Text(masjid['name']));
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() => _selectedMasjidId = newValue);
+              Autocomplete<Map<String, dynamic>>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return _masjids;
+                  }
+                  return _masjids.where((masjid) {
+                    return masjid['name']
+                        .toString()
+                        .toLowerCase()
+                        .contains(textEditingValue.text.toLowerCase());
+                  });
                 },
-                validator: (v) => v == null ? 'Selection required' : null,
+                displayStringForOption: (Map<String, dynamic> option) => option['name'],
+                onSelected: (Map<String, dynamic> selection) {
+                  setState(() {
+                    _selectedMasjidId = selection['id'];
+                  });
+                },
+                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                  if (_selectedMasjidId != null && controller.text.isEmpty) {
+                    final selectedMasjid = _masjids.firstWhere(
+                      (m) => m['id'] == _selectedMasjidId,
+                      orElse: () => {'name': ''},
+                    );
+                    controller.text = selectedMasjid['name'] ?? '';
+                  }
+                  
+                  return TextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: _inputDecoration("Search & Select Masjid", Icons.mosque_rounded),
+                    validator: (v) => _selectedMasjidId == null ? 'Please select a masjid' : null,
+                    onEditingComplete: onEditingComplete,
+                  );
+                },
+                optionsViewBuilder: (context, onSelected, options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        width: 300,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(8),
+                          itemCount: options.length,
+                          itemBuilder: (context, index) {
+                            final option = options.elementAt(index);
+                            return ListTile(
+                              leading: const Icon(Icons.mosque_rounded, color: Color(0xFF6366F1), size: 20),
+                              title: Text(option['name']),
+                              onTap: () => onSelected(option),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              hoverColor: const Color(0xFF6366F1).withOpacity(0.1),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
             const SizedBox(height: 32),
-            _buildSectionTitle("Message content"),
+            const Text(
+              "MESSAGE DETAILS",
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.2),
+            ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _titleController,
-              decoration: _inputDecoration("Subject Line", Icons.subject_rounded),
-              validator: (v) => v!.isEmpty ? 'Subject is required' : null,
+              decoration: _inputDecoration("Message Title", Icons.title_rounded),
+              validator: (v) => v!.isEmpty ? 'Title is required' : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _descriptionController,
-              decoration: _inputDecoration("Full Content", Icons.article_rounded),
-              maxLines: 4,
-              validator: (v) => v!.isEmpty ? 'Content is required' : null,
+              decoration: _inputDecoration("Message Body", Icons.message_rounded),
+              maxLines: 3,
+              validator: (v) => v!.isEmpty ? 'Body is required' : null,
             ),
             const SizedBox(height: 32),
+            const Text(
+              "IMAGE (OPTIONAL)",
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.2),
+            ),
+            const SizedBox(height: 12),
             _buildImagePickerZone(isSmall),
             const SizedBox(height: 40),
-            _buildSubmitButton(),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _showPreview,
+                    icon: const Icon(Icons.visibility_rounded),
+                    label: const Text('PREVIEW'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF6366F1),
+                      side: const BorderSide(color: Color(0xFF6366F1)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 2,
+                  child: _buildPublishButton(),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -516,6 +590,106 @@ class _InAppMessageScreenState extends State<InAppMessageScreen> {
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2)),
+    );
+  }
+
+  void _showPreview() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.visibility_rounded, color: Color(0xFF6366F1)),
+            SizedBox(width: 12),
+            Text('Message Preview', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_image != null) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 200,
+                      child: kIsWeb
+                          ? Image.network(_image!.path, fit: BoxFit.cover)
+                          : Image.file(File(_image!.path), fit: BoxFit.cover),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                Text(
+                  _titleController.text.isEmpty ? 'No Title' : _titleController.text,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _descriptionController.text.isEmpty ? 'No Description' : _descriptionController.text,
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CLOSE'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPublishButton() {
+    return Container(
+      width: double.infinity,
+      height: 60,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF6366F1).withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10)),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: _isLoading ? null : _sendMessage,
+        icon: _isLoading
+            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Icon(Icons.send_rounded, size: 20),
+        label: Text(_isLoading ? 'SENDING...' : 'PUBLISH MESSAGE', style: const TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistorySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "RECENT MESSAGES",
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.2),
+        ),
+        const SizedBox(height: 16),
+        _buildRecentHistory(false),
+      ],
     );
   }
 

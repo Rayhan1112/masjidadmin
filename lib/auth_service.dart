@@ -15,13 +15,14 @@ class AuthService {
 
   // Centralized function to update user data in Firestore
   Future<void> _updateAdminData(User user) async {
-    final docRef = _firestore.collection('admins').doc(user.uid);
+    final docRef = _firestore.collection('users').doc(user.uid);
     final snapshot = await docRef.get();
 
     final data = {
       'uid': user.uid,
       'email': user.email,
       'displayName': user.displayName,
+      'type': 'superAdmin',
       'lastLogin': FieldValue.serverTimestamp(),
     };
 
@@ -58,28 +59,79 @@ class AuthService {
   }
   Future<User?> signInWithPhonePassword(String phone, String password) async {
     try {
-      // Find user by phone number in Firestore
-      QuerySnapshot querySnapshot = await _firestore
+      // 1. Find user by phone number in Firestore
+      final querySnapshot = await _firestore
           .collection('users')
           .where('phone', isEqualTo: phone)
           .limit(1)
           .get();
 
-      if (querySnapshot.docs.isNotEmpty) {
-        var userDoc = querySnapshot.docs.first;
-        if (userDoc.get('password') == password) {
-          // In a real app, compare hashed passwords
-          // Sign in to Firebase Auth with the dummy email
-          UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-            email: '$phone@dummyemail.com',
-            password: password,
-          );
-          return userCredential.user;
+      if (querySnapshot.docs.isEmpty) {
+        debugPrint("Phone Login: No user found with phone $phone");
+        return null;
+      }
+
+      final userDoc = querySnapshot.docs.first;
+      final userData = userDoc.data();
+      final String? masjidId = userData['masjidId'];
+      final String? userEmail = userData['email'];
+      
+      bool isPasswordValid = false;
+
+      // 2. Check password in user document first
+      if (userData.containsKey('password')) {
+        isPasswordValid = userData['password'] == password;
+      } 
+      // 3. Fallback to check masjid's password if linked
+      else if (masjidId != null) {
+        final masjidDoc = await _firestore.collection('masjids').doc(masjidId).get();
+        if (masjidDoc.exists) {
+          isPasswordValid = (masjidDoc.data()?['password'] == password);
         }
       }
+
+      if (!isPasswordValid) {
+        debugPrint("Phone Login: Password mismatch for phone $phone");
+        return null;
+      }
+
+      // 4. Determine email for Firebase Auth login
+      // If we don't have an email in the user doc, use a dummy one
+      final loginEmail = userEmail ?? "${phone.replaceAll(' ', '')}@masjid.com";
+
+      // 5. Sign in or Create user in Firebase Auth
+      User? user;
+      try {
+        final userCredential = await _auth.signInWithEmailAndPassword(
+          email: loginEmail,
+          password: password,
+        );
+        user = userCredential.user;
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+          // If user doesn't exist in Auth, but we verified in Firestore, create them
+          final userCredential = await _auth.createUserWithEmailAndPassword(
+            email: loginEmail,
+            password: password,
+          );
+          user = userCredential.user;
+        } else {
+          rethrow;
+        }
+      }
+
+      if (user != null) {
+        // Sync timestamp
+        await userDoc.reference.set({
+          'lastLogin': FieldValue.serverTimestamp(),
+          'uid': user.uid, // Ensure UID is synced
+        }, SetOptions(merge: true));
+        return user;
+      }
+      
       return null;
     } catch (e) {
-      print(e); // Handle errors appropriately
+      debugPrint("Phone Login Error: $e");
       return null;
     }
   }
@@ -105,11 +157,12 @@ class AuthService {
 
       final user = userCredential.user;
       if (user != null) {
-        // 3. Link this UID to the MasjidID in admins collection
-        await _firestore.collection('admins').doc(user.uid).set({
+        // 3. Link this UID to the MasjidID in users collection
+        await _firestore.collection('users').doc(user.uid).set({
           'uid': user.uid,
           'email': email,
           'masjidId': mid,
+          'type': 'masjidAdmin',
           'lastLogin': FieldValue.serverTimestamp(),
           'displayName': data['name'] ?? 'Masjid Admin',
         }, SetOptions(merge: true));

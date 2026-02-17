@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class SuperAdminDashboardScreen extends StatefulWidget {
-  const SuperAdminDashboardScreen({super.key});
+  final Function(int)? onNavigate;
+  const SuperAdminDashboardScreen({super.key, this.onNavigate});
 
   @override
   State<SuperAdminDashboardScreen> createState() =>
@@ -39,7 +40,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
     try {
       final db = FirebaseFirestore.instance;
       final results = await Future.wait([
-        db.collection('admins').count().get(),
+        db.collection('users').count().get(),
         db.collection('masjids').count().get(),
         db
             .collection('notification_requests')
@@ -78,7 +79,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
                       children: [
                         _buildStatsGrid(),
                         const SizedBox(height: 30),
-                        _buildSectionHeader("Registration Highlights"),
+                        _buildSectionHeader("Registration Highlights", onTap: () => widget.onNavigate?.call(1)),
                         const SizedBox(height: 15),
                         _buildRecentMasjidsList(),
                       ],
@@ -149,47 +150,50 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
   Widget _buildStatsGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // dynamic columns and aspect ratio based on available width
         int crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
         double spacing = 12;
         final double cardWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
-        
-        // Ensure aspect ratio provides enough height (lower ratio = taller card)
-        // For very narrow cards, we want them to be taller.
-        double aspectRatio = cardWidth < 120 ? 0.9 : 1.2;
 
-        return GridView.count(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: spacing,
-          mainAxisSpacing: spacing,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: aspectRatio,
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
           children: [
-            _buildStatCard(
-              "Admins",
-              _totalAdmins.toString(),
-              Icons.admin_panel_settings_rounded,
-              const [Color(0xFF6366F1), Color(0xFF818CF8)],
+            SizedBox(
+              width: cardWidth,
+              child: _buildStatCard(
+                "Admins",
+                _totalAdmins.toString(),
+                Icons.admin_panel_settings_rounded,
+                const [Color(0xFF6366F1), Color(0xFF818CF8)],
+              ),
             ),
-            _buildStatCard(
-              "Masjids",
-              _totalMasjids.toString(),
-              Icons.mosque_rounded,
-              const [Color(0xFF10B981), Color(0xFF34D399)],
+            SizedBox(
+              width: cardWidth,
+              child: _buildStatCard(
+                "Masjids",
+                _totalMasjids.toString(),
+                Icons.mosque_rounded,
+                const [Color(0xFF10B981), Color(0xFF34D399)],
+              ),
             ),
-            _buildStatCard(
-              "Notifs",
-              _totalNotifications.toString(),
-              Icons.notifications_active_rounded,
-              const [Color(0xFFF59E0B), Color(0xFFFBBF24)],
+            SizedBox(
+              width: cardWidth,
+              child: _buildStatCard(
+                "Notifs",
+                _totalNotifications.toString(),
+                Icons.notifications_active_rounded,
+                const [Color(0xFFF59E0B), Color(0xFFFBBF24)],
+              ),
             ),
-            _buildStatCard(
-              "Ads",
-              "Active",
-              Icons.campaign_rounded,
-              const [Color(0xFFEF4444), Color(0xFFF87171)],
-              onTap: _showAdsSelectionDialog,
+            SizedBox(
+              width: cardWidth,
+              child: _buildStatCard(
+                "Ads",
+                "Active",
+                Icons.campaign_rounded,
+                const [Color(0xFFEF4444), Color(0xFFF87171)],
+                onTap: _showAdsSelectionDialog,
+              ),
             ),
           ],
         );
@@ -223,42 +227,38 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
       child: Stack(
         children: [
           Positioned(
-            right: -5,
-            top: -5,
-            child: Icon(icon, color: Colors.white.withOpacity(0.15), size: 60),
+            right: -10,
+            top: -10,
+            child: Icon(icon, color: Colors.white.withOpacity(0.15), size: 50),
           ),
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.bottomLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, color: Colors.white, size: 20),
-                  const SizedBox(height: 12),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      height: 1.0,
-                    ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: Colors.white, size: 18),
+                const SizedBox(height: 8),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    height: 1.0,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white.withOpacity(0.9),
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.white.withOpacity(0.9),
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              ),
+                  maxLines: 1,
+                ),
+              ],
             ),
           ),
         ],
@@ -268,7 +268,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, {VoidCallback? onTap}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -281,7 +281,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
           ),
         ),
         TextButton(
-          onPressed: () {},
+          onPressed: onTap,
           child: const Text("View All"),
         ),
       ],

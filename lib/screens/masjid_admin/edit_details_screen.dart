@@ -31,7 +31,7 @@ class _EditDetailsState extends State<EditDetailsScreen> {
     }
 
     try {
-      final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
+      final adminDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       String masjidId = user.uid;
       if (adminDoc.exists) {
         masjidId = adminDoc.data()?['masjidId'] ?? user.uid;
@@ -61,7 +61,7 @@ class _EditDetailsState extends State<EditDetailsScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
+      final adminDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       String masjidId = user.uid;
       if (adminDoc.exists) {
         masjidId = adminDoc.data()?['masjidId'] ?? user.uid;

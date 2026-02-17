@@ -36,7 +36,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     _emailController.text = user.email ?? 'No email associated';
 
-    final docRef = FirebaseFirestore.instance.collection('admins').doc(user.uid);
+    final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
     final snapshot = await docRef.get();
     if (snapshot.exists && snapshot.data() != null && mounted) {
       final data = snapshot.data()!;
@@ -62,7 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await user.updateDisplayName(_nameController.text);
       }
       
-      final docRef = FirebaseFirestore.instance.collection('admins').doc(user.uid);
+      final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
       await docRef.update({
         'displayName': _nameController.text,
         'phone':

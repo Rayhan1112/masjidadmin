@@ -6,6 +6,10 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>This app needs access to the photo library to select images for in-app messages.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>This app needs access to your location to show the nearest masajid and provide directions.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>This app needs access to your location to provide nearby masjid alerts.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Masjidadmin</string>
 	<key>CFBundleExecutable</key>

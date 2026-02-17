@@ -80,6 +80,24 @@ class SuperAdminSidebar extends StatelessWidget {
                   index: 6,
                   colorScheme: colorScheme,
                 ),
+                _buildNavItem(
+                  icon: Icons.fastfood_rounded,
+                  label: 'Tiffin Orders',
+                  index: 7,
+                  colorScheme: colorScheme,
+                ),
+                _buildNavItem(
+                  icon: Icons.tune_rounded,
+                  label: 'App Settings',
+                  index: 8,
+                  colorScheme: colorScheme,
+                ),
+                _buildNavItem(
+                  icon: Icons.bug_report_rounded,
+                  label: 'Failure Logs',
+                  index: 9,
+                  colorScheme: colorScheme,
+                ),
 
               ],
             ),
