@@ -43,28 +43,43 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (snapshot.hasData) {
           final user = snapshot.data!;
           
-          // Always store token on login/state change
-          FCMService.storeTokenToServer(user.uid);
+          return FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+            builder: (context, userDocSnapshot) {
+              if (userDocSnapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(body: Center(child: CircularProgressIndicator()));
+              }
 
-          // Check if this is the super admin
-          if (user.email == kSuperAdminEmail) {
-            // Ensure Super Admin document exists in 'users' collection
-            FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-              'email': user.email,
-              'type': 'super_admin',
-              'isAdmin': true,
-              'lastLogin': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
+              final userData = userDocSnapshot.data?.data() as Map<String, dynamic>?;
+              final String? masjidId = userData?['masjidId'];
 
-            // Subscribe super admin to alerts topic
-            debugPrint('[AuthWrapper] Subscribing Super Admin to alerts topic...');
-            FCMService.subscribeToSuperAdminAlerts();
-            return const SuperAdminScreen();
-          } else {
-            // Unsubscribe if not super admin (just in case)
-            FCMService.unsubscribeFromSuperAdminAlerts();
-          }
-          return const AdminHomeScreen();
+              // Always store token on login/state change with masjidId
+              FCMService.storeTokenToServer(user.uid, masjidId: masjidId);
+
+              // Subscribe to masjid topic if associated with one
+              if (masjidId != null) {
+                FCMService.subscribeToMasjidTopic(masjidId);
+              }
+
+              // Check if this is the super admin
+              if (user.email == kSuperAdminEmail) {
+                // ...existing super admin logic...
+                FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+                  'email': user.email,
+                  'type': 'super_admin',
+                  'isAdmin': true,
+                  'lastLogin': FieldValue.serverTimestamp(),
+                }, SetOptions(merge: true));
+
+                debugPrint('[AuthWrapper] Subscribing Super Admin to alerts topic...');
+                FCMService.subscribeToSuperAdminAlerts();
+                return const SuperAdminScreen();
+              } else {
+                FCMService.unsubscribeFromSuperAdminAlerts();
+              }
+              return const AdminHomeScreen();
+            },
+          );
         }
 
         // If logged out, ensure unsubscribed

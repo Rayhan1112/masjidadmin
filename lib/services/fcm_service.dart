@@ -138,14 +138,14 @@ class FCMService {
     }
   }
 
-  static Future<void> storeTokenToServer(String userId) async {
+  static Future<void> storeTokenToServer(String userId, {String? masjidId}) async {
     try {
       String? token = await _messaging.getToken();
       
       if (token == null) return;
 
       if (kDebugMode) {
-        print('Storing FCM Token for $userId: $token');
+        print('Storing FCM Token for $userId (Masjid: $masjidId): $token');
       }
 
       final url = Uri.parse('${NotificationApiService.baseUrl}/tokens/store');
@@ -155,6 +155,7 @@ class FCMService {
         body: jsonEncode({
           'userId': userId,
           'token': token,
+          'masjidId': masjidId,
           'deviceInfo': {
             'platform': defaultTargetPlatform.toString(),
             'updatedAt': DateTime.now().toIso8601String(),
@@ -174,6 +175,34 @@ class FCMService {
     } catch (e) {
       if (kDebugMode) {
         print('Error storing token: $e');
+      }
+    }
+  }
+
+  static Future<void> subscribeToMasjidTopic(String masjidId) async {
+    if (kIsWeb) return;
+    try {
+      await _messaging.subscribeToTopic('masjid_$masjidId');
+      if (kDebugMode) {
+        print('Subscribed to masjid_$masjidId');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error subscribing to masjid topic: $e');
+      }
+    }
+  }
+
+  static Future<void> unsubscribeFromMasjidTopic(String masjidId) async {
+    if (kIsWeb) return;
+    try {
+      await _messaging.unsubscribeFromTopic('masjid_$masjidId');
+      if (kDebugMode) {
+        print('Unsubscribed from masjid_$masjidId');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error unsubscribing from masjid topic: $e');
       }
     }
   }
