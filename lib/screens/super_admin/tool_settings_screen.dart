@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:masjidadmin/services/app_config_service.dart';
+import 'package:masjidadmin/screens/super_admin/kids_content_management_screen.dart';
 
 class ToolSettingsScreen extends StatefulWidget {
   const ToolSettingsScreen({super.key});
@@ -10,6 +11,7 @@ class ToolSettingsScreen extends StatefulWidget {
 
 class _ToolSettingsScreenState extends State<ToolSettingsScreen> {
   List<ToolConfig> _tools = [];
+  List<KidsFeatureConfig> _kidsFeatures = [];
   bool _isLoading = true;
 
   @override
@@ -19,17 +21,27 @@ class _ToolSettingsScreenState extends State<ToolSettingsScreen> {
   }
 
   Future<void> _loadConfig() async {
-    final stream = AppConfigService.getToolConfigStream();
-    final first = await stream.first;
+    final toolsStream = AppConfigService.getToolConfigStream();
+    final kidsStream = AppConfigService.getKidsConfigStream();
+    
+    final results = await Future.wait([
+      toolsStream.first,
+      kidsStream.first,
+    ]);
+
     setState(() {
-      _tools = first;
+      _tools = results[0] as List<ToolConfig>;
+      _kidsFeatures = results[1] as List<KidsFeatureConfig>;
       _isLoading = false;
     });
   }
 
   Future<void> _saveConfig() async {
     try {
-      await AppConfigService.saveToolConfig(_tools);
+      await Future.wait([
+        AppConfigService.saveToolConfig(_tools),
+        AppConfigService.saveKidsConfig(_kidsFeatures),
+      ]);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -111,8 +123,8 @@ class _ToolSettingsScreenState extends State<ToolSettingsScreen> {
                     borderRadius: BorderRadius.circular(15),
                     side: BorderSide(color: Colors.grey.withOpacity(0.1)),
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: ExpansionTile(
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     leading: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
@@ -148,6 +160,47 @@ class _ToolSettingsScreenState extends State<ToolSettingsScreen> {
                         });
                       },
                     ),
+                    children: tool.id == 'kids' ? [
+                      const Divider(indent: 70, endIndent: 20),
+                      ...List.generate(_kidsFeatures.length, (kIndex) {
+                        final feature = _kidsFeatures[kIndex];
+                        return ListTile(
+                          contentPadding: const EdgeInsets.only(left: 70, right: 20),
+                          title: Text(feature.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                          trailing: Switch(
+                            value: feature.isEnabled,
+                            activeColor: const Color(0xFF6366F1),
+                            onChanged: (val) {
+                              setState(() {
+                                _kidsFeatures[kIndex] = KidsFeatureConfig(
+                                  id: feature.id,
+                                  label: feature.label,
+                                  isEnabled: val,
+                                );
+                              });
+                            },
+                          ),
+                        );
+                      }),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(70, 0, 20, 10),
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const KidsContentManagementScreen()),
+                            );
+                          },
+                          icon: const Icon(Icons.edit_note_rounded, size: 18),
+                          label: const Text("MANAGE CONTENT"),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF6366F1),
+                            side: const BorderSide(color: Color(0xFF6366F1)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ] : const [],
                   ),
                 );
               },
@@ -164,6 +217,7 @@ class _ToolSettingsScreenState extends State<ToolSettingsScreen> {
       case 'tasbeeh': return Icons.vibration_rounded;
       case 'qibla': return Icons.explore_rounded;
       case 'kids': return Icons.child_care_rounded;
+      case 'roza_timing': return Icons.restaurant_menu_rounded;
       default: return Icons.build_rounded;
     }
   }

@@ -29,6 +29,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoadingData = true;
   List<ToolConfig> _enabledTools = [];
   String? _userType;
+  Map<String, dynamic>? _todayRoza;
+  bool _isRozaLoading = true;
 
   StreamSubscription? _masjidSubscription;
   StreamSubscription? _adminSubscription;
@@ -39,6 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_userId != null) {
       _fetchData();
       _fetchToolSettings();
+      _fetchTodayRoza();
     } else {
       setState(() => _isLoadingData = false);
     }
@@ -151,6 +154,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
         MaterialPageRoute(builder: (context) => const EditLocationScreen()));
   }
 
+  Future<void> _fetchTodayRoza() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('settings').doc('ramzan_calendar').get();
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data['schedule'] != null) {
+          final List<dynamic> schedule = data['schedule'];
+          final now = DateTime.now();
+          final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+          
+          final todayData = schedule.firstWhere(
+            (item) {
+              final dateStr = item['date'] as String;
+              return dateStr.startsWith(todayStr);
+            },
+            orElse: () => null,
+          );
+
+          if (mounted) {
+            setState(() {
+              _todayRoza = todayData;
+              _isRozaLoading = false;
+            });
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching today roza: $e");
+    }
+    if (mounted) setState(() => _isRozaLoading = false);
+  }
+
   void _navigateToCreateMasjid() {
     Navigator.of(context).push(
         MaterialPageRoute(builder: (context) => const CreateMasjidScreen()));
@@ -181,9 +217,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           if (_userType == 'masjidAdmin' || _userType == 'super_admin') 
             _buildActionCards(theme),
-          if (_enabledTools.isNotEmpty) ...[
+          if (_enabledTools.any((t) => t.id == 'roza_timing')) ...[
             const SizedBox(height: 25),
-            _buildToolsGrid(theme),
+            _buildRozaCard(theme),
+          ],
+          if (_enabledTools.where((t) => t.id != 'roza_timing').isNotEmpty) ...[
+            const SizedBox(height: 25),
+            _buildToolsGrid(theme, excludeRoza: true),
           ],
           const SizedBox(height: 25),
           _buildTimingsCard(theme),
@@ -194,7 +234,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildToolsGrid(ThemeData theme) {
+  Widget _buildToolsGrid(ThemeData theme, {bool excludeRoza = false}) {
+    final tools = excludeRoza 
+      ? _enabledTools.where((t) => t.id != 'roza_timing').toList() 
+      : _enabledTools;
+
+    if (tools.isEmpty) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -214,11 +260,146 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisSpacing: 15,
             childAspectRatio: 2.5,
           ),
-          itemCount: _enabledTools.length,
+          itemCount: tools.length,
           itemBuilder: (context, index) {
-            final tool = _enabledTools[index];
+            final tool = tools[index];
             return _buildToolCard(theme, tool);
           },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRozaCard(ThemeData theme) {
+    if (_isRozaLoading) {
+      return Container(
+        height: 120,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25)),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_todayRoza == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -20,
+            top: -20,
+            child: Icon(Icons.restaurant_menu_rounded, color: Colors.white.withOpacity(0.1), size: 100),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "TODAY'S ROZA",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        Text(
+                          "Ramzan Day ${_todayRoza!['day']}",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.wb_sunny_rounded, color: Colors.white, size: 20),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildRozaTimeItem(
+                        "SEHRI ENDS",
+                        _todayRoza!['sehri'] ?? '--:--',
+                        Icons.wb_twilight_rounded,
+                      ),
+                    ),
+                    Container(width: 1, height: 40, color: Colors.white.withOpacity(0.2)),
+                    Expanded(
+                      child: _buildRozaTimeItem(
+                        "IFTAR STARTS",
+                        _todayRoza!['iftar'] ?? '--:--',
+                        Icons.nights_stay_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRozaTimeItem(String label, String time, IconData icon) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white70, size: 14),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          time,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+          ),
         ),
       ],
     );

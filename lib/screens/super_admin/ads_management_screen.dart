@@ -20,86 +20,70 @@ class AdsManagementScreen extends StatefulWidget {
 class _AdsManagementScreenState extends State<AdsManagementScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _textAdFormKey = GlobalKey<FormState>();
-
-  // Text Ad State
-  final _textContentController = TextEditingController();
-  double _fontSize = 16.0;
-  Color _selectedColor = Colors.black;
-  bool _isBold = false;
-  bool _isItalic = false;
 
   // Image Ad State
   XFile? _selectedImage;
   bool _isUploading = false;
 
-  final List<Color> _colorOptions = [
-    Colors.black,
-    Colors.white,
-    Colors.red,
-    Colors.blue,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.teal,
-  ];
+  // Full Screen Ad State
+  XFile? _selectedFullScreenImage;
+  bool _isFullScreenEnabled = false;
+  String? _existingFullScreenImageUrl;
+  bool _isLoadingFullScreen = true;
+
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadFullScreenAdSettings();
+  }
+
+  Future<void> _loadFullScreenAdSettings() async {
+    try {
+      // Fetch the latest full screen ad from the ads collection
+      final snapshot = await FirebaseFirestore.instance
+          .collection('ads')
+          .where('type', isEqualTo: 'full_screen')
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        setState(() {
+          _isFullScreenEnabled = data['isActive'] ?? false;
+          _existingFullScreenImageUrl = data['imageUrl'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading full screen ad settings: $e");
+    } finally {
+      setState(() => _isLoadingFullScreen = false);
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _textContentController.dispose();
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage({bool isFullScreen = false}) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile != null) {
       setState(() {
-        _selectedImage = pickedFile;
+        if (isFullScreen) {
+          _selectedFullScreenImage = pickedFile;
+        } else {
+          _selectedImage = pickedFile;
+        }
       });
     }
   }
 
-  Future<void> _saveTextAd() async {
-    if (!_textAdFormKey.currentState!.validate()) return;
-
-    setState(() => _isUploading = true);
-    try {
-      await FirebaseFirestore.instance.collection('ads').add({
-        'type': 'text',
-        'content': _textContentController.text,
-        'style': {
-          'fontSize': _fontSize,
-          'color': _selectedColor.value,
-          'isBold': _isBold,
-          'isItalic': _isItalic,
-        },
-        'isActive': true,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Text Ad saved successfully!')));
-        _textContentController.clear();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error saving text ad: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
-    }
-  }
 
   Future<void> _saveImageAd() async {
     if (_selectedImage == null) {
@@ -160,6 +144,60 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
             .showSnackBar(SnackBar(content: Text('Error saving image ad: $e')));
         setState(() => _isUploading = false);
       }
+    }
+  }
+
+  Future<void> _saveFullScreenAd() async {
+    if (_selectedFullScreenImage == null && _existingFullScreenImageUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an image first.')));
+      return;
+    }
+
+    setState(() => _isUploading = true);
+    try {
+      String downloadUrl = _existingFullScreenImageUrl ?? "";
+
+      if (_selectedFullScreenImage != null) {
+        final String cloudName = "djlhicadd";
+        final String uploadPreset = "mahalaxmi";
+        final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
+        final request = http.MultipartRequest('POST', url)..fields['upload_preset'] = uploadPreset;
+
+        if (kIsWeb) {
+          final bytes = await _selectedFullScreenImage!.readAsBytes();
+          request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: _selectedFullScreenImage!.name));
+        } else {
+          request.files.add(await http.MultipartFile.fromPath('file', _selectedFullScreenImage!.path));
+        }
+
+        final response = await request.send();
+        if (response.statusCode == 200) {
+          final responseData = await response.stream.bytesToString();
+          final jsonResponse = jsonDecode(responseData);
+          downloadUrl = jsonResponse['secure_url'];
+        } else {
+          throw Exception('Cloudinary upload failed');
+        }
+      }
+
+      await FirebaseFirestore.instance.collection('ads').add({
+        'type': 'full_screen',
+        'imageUrl': downloadUrl,
+        'isActive': _isFullScreenEnabled,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Full Screen Ad published!')));
+        setState(() {
+          _existingFullScreenImageUrl = downloadUrl;
+          _selectedFullScreenImage = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 
@@ -224,8 +262,8 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    _buildTextAdTab(isSmall),
                     _buildImageAdTab(isSmall),
+                    _buildFullScreenAdTab(isSmall),
                     _buildManageAdsTab(isSmall),
                   ],
                 ),
@@ -264,17 +302,6 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.text_fields_rounded, size: 20),
-                if (!isSmall) const SizedBox(width: 8),
-                if (!isSmall) const Text("Text Ad"),
-              ],
-            ),
-          ),
-          Tab(
-            height: 60,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
                 const Icon(Icons.image_rounded, size: 20),
                 if (!isSmall) const SizedBox(width: 8),
                 if (!isSmall) const Text("Image Ad"),
@@ -286,9 +313,20 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                const Icon(Icons.fullscreen_rounded, size: 20),
+                if (!isSmall) const SizedBox(width: 8),
+                if (!isSmall) const Text("Full Screen"),
+              ],
+            ),
+          ),
+          Tab(
+            height: 60,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
                 const Icon(Icons.settings_suggest_rounded, size: 20),
                 if (!isSmall) const SizedBox(width: 8),
-                if (!isSmall) const Text("Manage Ads"),
+                if (!isSmall) const Text("Manage"),
               ],
             ),
           ),
@@ -297,76 +335,6 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
     );
   }
 
-  Widget _buildTextAdTab(bool isSmall) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isSmall ? 16 : 24),
-      child: Form(
-        key: _textAdFormKey,
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 800),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSectionHeader("Compose Message", Icons.edit_note_rounded),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _textContentController,
-                  maxLines: 4,
-                  onChanged: (v) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: "Enter the announcement text here...",
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.shade200),
-                    ),
-                  ),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Content is required" : null,
-                ),
-                const SizedBox(height: 32),
-                _buildSectionHeader("Display Configuration", Icons.tune_rounded),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.grey.shade100),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildSliderRow("Font Size", _fontSize, (val) => setState(() => _fontSize = val)),
-                      const Divider(height: 32),
-                      _buildStyleToggles(),
-                      const Divider(height: 32),
-                      _buildColorPicker(),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-                _buildSectionHeader("Real-time Preview", Icons.visibility_rounded),
-                const SizedBox(height: 20),
-                _buildPreviewContainer(),
-                const SizedBox(height: 40),
-                _buildSubmitButton(
-                  onPressed: _isUploading ? null : _saveTextAd,
-                  label: _isUploading ? "Processing..." : "Deploy Text Ad",
-                  icon: Icons.rocket_launch_rounded,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(
@@ -383,130 +351,6 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSliderRow(String label, double value, Function(double) onChanged) {
-    return Row(
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
-        const Spacer(),
-        SizedBox(
-          width: 200,
-          child: Slider(
-            value: value,
-            min: 10,
-            max: 40,
-            divisions: 30,
-            activeColor: const Color(0xFF6366F1),
-            onChanged: onChanged,
-          ),
-        ),
-        Text("${value.round()}px", style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF6366F1))),
-      ],
-    );
-  }
-
-  Widget _buildStyleToggles() {
-    return Row(
-      children: [
-        const Text("Typography Style", style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
-        const Spacer(),
-        _buildMiniToggle(label: "Bold", isSelected: _isBold, onToggle: (v) => setState(() => _isBold = v)),
-        const SizedBox(width: 12),
-        _buildMiniToggle(label: "Italic", isSelected: _isItalic, onToggle: (v) => setState(() => _isItalic = v)),
-      ],
-    );
-  }
-
-  Widget _buildMiniToggle({required String label, required bool isSelected, required Function(bool) onToggle}) {
-    return InkWell(
-      onTap: () => onToggle(!isSelected),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6366F1) : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF64748B),
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            fontSize: 12,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildColorPicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Accent Color", style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
-        const SizedBox(height: 16),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _colorOptions.map((color) {
-              final isSelected = _selectedColor == color;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedColor = color),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 12),
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
-                      width: 3,
-                    ),
-                    boxShadow: isSelected ? [
-                      BoxShadow(color: color.withOpacity(0.4), blurRadius: 8, spreadRadius: 1)
-                    ] : null,
-                  ),
-                  child: isSelected ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPreviewContainer() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.grey.shade100),
-        gradient: LinearGradient(
-          colors: [Colors.white, Colors.grey.shade50],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Center(
-        child: Text(
-          _textContentController.text.isEmpty
-              ? "Announcement text preview will be shown here..."
-              : _textContentController.text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: _fontSize,
-            color: _selectedColor,
-            fontWeight: _isBold ? FontWeight.bold : FontWeight.normal,
-            fontStyle: _isItalic ? FontStyle.italic : FontStyle.normal,
-            height: 1.4,
-          ),
-        ),
-      ),
     );
   }
 
@@ -578,9 +422,86 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
     );
   }
 
+  Widget _buildFullScreenAdTab(bool isSmall) {
+    if (_isLoadingFullScreen) return const Center(child: CircularProgressIndicator());
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(isSmall ? 16 : 24),
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionHeader("Full Screen Visibility", Icons.visibility_rounded),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                title: const Text("Enable Full Screen Overlay", style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text("Shows a full-screen image ad when users open the app"),
+                value: _isFullScreenEnabled,
+                activeColor: const Color(0xFF6366F1),
+                onChanged: (val) => setState(() => _isFullScreenEnabled = val),
+              ),
+              const SizedBox(height: 32),
+              _buildSectionHeader("Full Screen Creative", Icons.fullscreen_rounded),
+              const SizedBox(height: 20),
+              _buildFullScreenPickerZone(),
+              const SizedBox(height: 48),
+              _buildSubmitButton(
+                onPressed: _isUploading ? null : _saveFullScreenAd,
+                label: _isUploading ? "Applying Changes..." : "Save Full Screen Settings",
+                icon: Icons.save_rounded,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFullScreenPickerZone() {
+    return InkWell(
+      onTap: () => _pickImage(isFullScreen: true),
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        height: 400,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 10)),
+          ],
+        ),
+        child: _selectedFullScreenImage != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: kIsWeb 
+                    ? Image.network(_selectedFullScreenImage!.path, fit: BoxFit.contain)
+                    : Image.file(File(_selectedFullScreenImage!.path), fit: BoxFit.contain),
+              )
+            : (_existingFullScreenImageUrl != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: Image.network(_existingFullScreenImageUrl!, fit: BoxFit.contain, 
+                      errorBuilder: (c,e,s) => const Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey))),
+                  )
+                : const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_photo_alternate_rounded, size: 48, color: Color(0xFF6366F1)),
+                      SizedBox(height: 16),
+                      Text("Select Full Screen Ad Image", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  )),
+      ),
+    );
+  }
+
   Widget _buildImagePickerZone() {
     return InkWell(
-      onTap: _pickImage,
+      onTap: () => _pickImage(isFullScreen: false),
       borderRadius: BorderRadius.circular(28),
       child: Container(
         height: 300,
@@ -685,10 +606,9 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
                       width: 100,
                       height: 100,
                       color: const Color(0xFFF8FAFC),
-                      child: type == 'image' && data['imageUrl'] != null
+                      child: data['imageUrl'] != null
                           ? Image.network(data['imageUrl'], fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.broken_image))
-                          : const Center(
-                              child: Icon(Icons.text_fields_rounded, color: Color(0xFF6366F1))),
+                          : const Center(child: Icon(Icons.image_not_supported_rounded, color: Colors.grey)),
                     ),
                     Expanded(
                       child: Padding(
@@ -697,7 +617,7 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              type == 'image' ? "IMAGE AD" : "TEXT AD",
+                              type == 'full_screen' ? "FULL SCREEN AD" : "IMAGE AD",
                               style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
@@ -707,9 +627,7 @@ class _AdsManagementScreenState extends State<AdsManagementScreen>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              type == 'image'
-                                  ? "Visual Campaign"
-                                  : data['content'] ?? 'No content',
+                              type == 'full_screen' ? "Splash Overlay" : "Visual Campaign",
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(

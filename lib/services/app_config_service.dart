@@ -65,10 +65,39 @@ class ToolConfig {
   }
 }
 
+class KidsFeatureConfig {
+  final String id;
+  final String label;
+  final bool isEnabled;
+
+  KidsFeatureConfig({
+    required this.id,
+    required this.label,
+    this.isEnabled = true,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'label': label,
+      'isEnabled': isEnabled,
+    };
+  }
+
+  static KidsFeatureConfig fromMap(Map<String, dynamic> map) {
+    return KidsFeatureConfig(
+      id: map['id'],
+      label: map['label'],
+      isEnabled: map['isEnabled'] ?? true,
+    );
+  }
+}
+
 class AppConfigService {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
   static const String _configDocPath = 'settings/app_navigation';
   static const String _toolsDocPath = 'settings/app_tools';
+  static const String _kidsDocPath = 'settings/kids_settings';
 
   static Stream<List<TabConfig>> getTabConfigStream() {
     return _db.doc(_configDocPath).snapshots().map((snapshot) {
@@ -162,6 +191,37 @@ class AppConfigService {
     await _db.doc(_toolsDocPath).set({'tools': toolsData}, SetOptions(merge: true));
   }
 
+  static Stream<List<KidsFeatureConfig>> getKidsConfigStream() {
+    return _db.doc(_kidsDocPath).snapshots().map((snapshot) {
+      final defaultFeatures = _getDefaultKidsFeatures();
+      if (!snapshot.exists || snapshot.data() == null) {
+        return defaultFeatures;
+      }
+      final List<dynamic> data = snapshot.data()!['features'] ?? [];
+      final savedFeatures = data.map((t) => KidsFeatureConfig.fromMap(t as Map<String, dynamic>)).toList();
+
+      final List<KidsFeatureConfig> merged = [];
+      for (var def in defaultFeatures) {
+        final saved = savedFeatures.where((t) => t.id == def.id).firstOrNull;
+        if (saved != null) {
+          merged.add(KidsFeatureConfig(
+            id: def.id,
+            label: def.label,
+            isEnabled: saved.isEnabled,
+          ));
+        } else {
+          merged.add(def);
+        }
+      }
+      return merged;
+    });
+  }
+
+  static Future<void> saveKidsConfig(List<KidsFeatureConfig> features) async {
+    final data = features.map((t) => t.toMap()).toList();
+    await _db.doc(_kidsDocPath).set({'features': data}, SetOptions(merge: true));
+  }
+
   static List<TabConfig> _getDefaultTabs() {
     return [
       TabConfig(id: 'home', label: 'Home', icon: 'home', order: 0),
@@ -180,6 +240,16 @@ class AppConfigService {
       ToolConfig(id: 'tasbeeh', label: 'Tasbeeh'),
       ToolConfig(id: 'qibla', label: 'Qibla Direction'),
       ToolConfig(id: 'kids', label: 'Kids'),
+      ToolConfig(id: 'roza_timing', label: 'Roza Timing Card'),
+    ];
+  }
+
+  static List<KidsFeatureConfig> _getDefaultKidsFeatures() {
+    return [
+      KidsFeatureConfig(id: 'kids_dua', label: 'Kids Dua'),
+      KidsFeatureConfig(id: 'kids_quiz', label: 'Kids Quiz'),
+      KidsFeatureConfig(id: 'kids_stories', label: 'Kids Stories'),
+      KidsFeatureConfig(id: 'arabic_lessons', label: 'Arabic Lessons'),
     ];
   }
 }
