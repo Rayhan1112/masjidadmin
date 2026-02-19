@@ -28,22 +28,33 @@ class _NotificationSenderScreenState extends State<NotificationSenderScreen> {
       FirebaseFirestore.instance.collection('masjids');
 
   bool _isSuperAdmin = false;
+  String? _masjidId;
   String? _selectedMasjidId;
   List<Map<String, dynamic>> _masjids = [];
 
   @override
   void initState() {
     super.initState();
-    _checkSuperAdminStatus();
+    _checkStatusAndFetchData();
   }
 
-  void _checkSuperAdminStatus() {
+  Future<void> _checkStatusAndFetchData() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null && user.email == kSuperAdminEmail) {
+    if (user == null) return;
+
+    if (user.email == kSuperAdminEmail) {
       setState(() {
         _isSuperAdmin = true;
       });
       _fetchMasjids();
+    } else {
+      // Fetch masjidId for Masjid Admin
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (mounted) {
+        setState(() {
+          _masjidId = doc.data()?['masjidId'] ?? user.uid;
+        });
+      }
     }
   }
 
@@ -90,9 +101,9 @@ class _NotificationSenderScreenState extends State<NotificationSenderScreen> {
         return;
       }
 
-      final masjidId = (_isSuperAdmin && _selectedTarget == 'masjid_follower')
-          ? _selectedMasjidId
-          : user.uid;
+      final masjidId = _isSuperAdmin
+          ? (_selectedTarget == 'masjid_follower' ? _selectedMasjidId : 'all')
+          : _masjidId;
 
       // Logic: If Super Admin, send directly. If Masjid Admin, send for approval.
       if (_isSuperAdmin) {
@@ -104,6 +115,7 @@ class _NotificationSenderScreenState extends State<NotificationSenderScreen> {
           'masjidId': masjidId,
           'sentBy': user.uid,
           'sentAt': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
           'status': 'sent',
         });
 
@@ -122,8 +134,9 @@ class _NotificationSenderScreenState extends State<NotificationSenderScreen> {
           'target': _selectedTarget,
           'masjidId': masjidId,
           'requestedBy': user.uid,
-          'masjidName': 'Masjid Admin', // Optional: could fetch real name
+          'masjidName': 'Masjid Admin', 
           'requestedAt': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
           'status': 'waiting_approval',
           'type': 'notification',
         });
@@ -486,86 +499,128 @@ class _NotificationSenderScreenState extends State<NotificationSenderScreen> {
         ),
         const SizedBox(height: 16),
         StreamBuilder<QuerySnapshot>(
-          stream: _notificationsRef.orderBy('sentAt', descending: true).limit(20).snapshots(),
+          stream: _isSuperAdmin 
+              ? _notificationsRef.orderBy('createdAt', descending: true).limit(20).snapshots()
+              : (_masjidId != null 
+                  ? _notificationsRef.where('masjidId', isEqualTo: _masjidId).orderBy('createdAt', descending: true).limit(20).snapshots()
+                  : _notificationsRef.orderBy('createdAt', descending: true).limit(20).snapshots()),
           builder: (context, snapshot) {
-            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-            
-            final docs = _isSuperAdmin 
-                ? snapshot.data!.docs 
-                : snapshot.data!.docs.where((d) => (d.data() as Map)['sentBy'] == FirebaseAuth.instance.currentUser?.uid).toList();
-
-            if (docs.isEmpty) {
-              return Container(
-                padding: const EdgeInsets.all(32),
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.grey.shade100),
-                ),
-                child: const Column(
-                  children: [
-                    Icon(Icons.history_toggle_off_rounded, size: 40, color: Color(0xFFCBD5E1)),
-                    SizedBox(height: 12),
-                    Text("No transmission history", style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                  ],
-                ),
+            if (snapshot.hasError) {
+              debugPrint("Firestore Query Error: ${snapshot.error}");
+              // Fallback to simple query if composite index is missing
+              return StreamBuilder<QuerySnapshot>(
+                stream: _notificationsRef.orderBy('createdAt', descending: true).limit(20).snapshots(),
+                builder: (context, fallbackSnapshot) {
+                  if (!fallbackSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+                  final allDocs = fallbackSnapshot.data!.docs;
+                  final filteredDocs = _isSuperAdmin 
+                      ? allDocs 
+                      : allDocs.where((d) => (d.data() as Map)['masjidId'] == _masjidId).toList();
+                  return _buildHistoryList(filteredDocs);
+                },
               );
             }
-
-            return ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: docs.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final data = docs[index].data() as Map<String, dynamic>;
-                final time = data['sentAt'] as Timestamp?;
-                
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade100),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), shape: BoxShape.circle),
-                        child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(data['title'] ?? 'No Title', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            Text(data['body'] ?? '', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (time != null)
-                            Text(timeago.format(time.toDate()), style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
-                            onPressed: () => _deleteNotification(docs[index].id),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
+            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+            return _buildHistoryList(snapshot.data!.docs);
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildHistoryList(List<QueryDocumentSnapshot> docs) {
+    if (docs.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(32),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade100),
+        ),
+        child: const Column(
+          children: [
+            Icon(Icons.history_toggle_off_rounded, size: 40, color: Color(0xFFCBD5E1)),
+            SizedBox(height: 12),
+            Text("No transmission history", style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: docs.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final data = docs[index].data() as Map<String, dynamic>;
+        final status = data['status'] ?? 'sent';
+        final isPending = status == 'waiting_approval';
+        final time = (data['createdAt'] ?? data['sentAt'] ?? data['requestedAt']) as Timestamp?;
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isPending ? Colors.orange.shade100 : Colors.grey.shade100),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                    color: (isPending ? Colors.orange : const Color(0xFF10B981)).withOpacity(0.1),
+                    shape: BoxShape.circle),
+                child: Icon(
+                    isPending ? Icons.pending_actions_rounded : Icons.check_circle_rounded,
+                    color: isPending ? Colors.orange : const Color(0xFF10B981),
+                    size: 18),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                            child: Text(data['title'] ?? 'No Title',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+                        if (isPending)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
+                            child: const Text("PENDING",
+                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.orange)),
+                          ),
+                      ],
+                    ),
+                    Text(data['body'] ?? '',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (time != null)
+                    Text(timeago.format(time.toDate()),
+                        style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                    onPressed: () => _deleteNotification(docs[index].id),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

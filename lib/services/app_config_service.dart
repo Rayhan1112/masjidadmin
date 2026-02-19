@@ -37,9 +37,38 @@ class TabConfig {
   }
 }
 
+class ToolConfig {
+  final String id;
+  final String label;
+  final bool isEnabled;
+
+  ToolConfig({
+    required this.id,
+    required this.label,
+    this.isEnabled = true,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'label': label,
+      'isEnabled': isEnabled,
+    };
+  }
+
+  static ToolConfig fromMap(Map<String, dynamic> map) {
+    return ToolConfig(
+      id: map['id'],
+      label: map['label'],
+      isEnabled: map['isEnabled'] ?? true,
+    );
+  }
+}
+
 class AppConfigService {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
   static const String _configDocPath = 'settings/app_navigation';
+  static const String _toolsDocPath = 'settings/app_tools';
 
   static Stream<List<TabConfig>> getTabConfigStream() {
     return _db.doc(_configDocPath).snapshots().map((snapshot) {
@@ -102,6 +131,37 @@ class AppConfigService {
     await _db.doc(_configDocPath).update({'tabs': tabsData});
   }
 
+  static Stream<List<ToolConfig>> getToolConfigStream() {
+    return _db.doc(_toolsDocPath).snapshots().map((snapshot) {
+      final defaultTools = _getDefaultTools();
+      if (!snapshot.exists || snapshot.data() == null) {
+        return defaultTools;
+      }
+      final List<dynamic> toolsData = snapshot.data()!['tools'] ?? [];
+      final savedTools = toolsData.map((t) => ToolConfig.fromMap(t as Map<String, dynamic>)).toList();
+
+      final List<ToolConfig> mergedTools = [];
+      for (var defTool in defaultTools) {
+        final savedTool = savedTools.where((t) => t.id == defTool.id).firstOrNull;
+        if (savedTool != null) {
+          mergedTools.add(ToolConfig(
+            id: defTool.id,
+            label: defTool.label,
+            isEnabled: savedTool.isEnabled,
+          ));
+        } else {
+          mergedTools.add(defTool);
+        }
+      }
+      return mergedTools;
+    });
+  }
+
+  static Future<void> saveToolConfig(List<ToolConfig> tools) async {
+    final toolsData = tools.map((t) => t.toMap()).toList();
+    await _db.doc(_toolsDocPath).set({'tools': toolsData}, SetOptions(merge: true));
+  }
+
   static List<TabConfig> _getDefaultTabs() {
     return [
       TabConfig(id: 'home', label: 'Home', icon: 'home', order: 0),
@@ -113,4 +173,14 @@ class AppConfigService {
       TabConfig(id: 'profile', label: 'Profile', icon: 'person', order: 6),
     ];
   }
+
+  static List<ToolConfig> _getDefaultTools() {
+    return [
+      ToolConfig(id: 'kaza_namaz', label: 'Kaza Namaz Calculator'),
+      ToolConfig(id: 'tasbeeh', label: 'Tasbeeh'),
+      ToolConfig(id: 'qibla', label: 'Qibla Direction'),
+      ToolConfig(id: 'kids', label: 'Kids'),
+    ];
+  }
 }
+

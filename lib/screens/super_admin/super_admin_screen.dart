@@ -16,6 +16,7 @@ import 'package:masjidadmin/screens/super_admin/failure_logs_screen.dart';
 import 'package:masjidadmin/screens/super_admin/analytics_screen.dart';
 import 'package:masjidadmin/screens/super_admin/user_list_screen.dart';
 import 'package:masjidadmin/screens/super_admin/approval_queue_screen.dart';
+import 'package:masjidadmin/screens/super_admin/tool_settings_screen.dart';
 
 class SuperAdminScreen extends StatefulWidget {
   const SuperAdminScreen({super.key});
@@ -131,7 +132,6 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
   static const List<String> _titles = <String>[
     'Dashboard',
     'Analytics',
-    'Users List',
     'Approvals',
     'All Masjids',
     'All Admins',
@@ -141,6 +141,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
     'Ramzan Calendar',
     'Tiffin Orders',
     'App Settings',
+    'Tool Settings',
     'Failure Logs',
   ];
 
@@ -155,7 +156,6 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
     final List<Widget> widgetOptions = [
       SuperAdminDashboardScreen(onNavigate: _onItemTapped),
       const AnalyticsScreen(),
-      const UserListScreen(),
       const ApprovalQueueScreen(),
       const AllMasjidsScreen(),
       const AllAdminsScreen(),
@@ -165,6 +165,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
       const RamzanCalendarScreen(),
       const TiffinOrdersScreen(),
       const AppSettingsScreen(),
+      const ToolSettingsScreen(),
       const FailureLogsScreen(),
     ];
 

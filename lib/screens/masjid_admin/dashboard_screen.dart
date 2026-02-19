@@ -7,6 +7,7 @@ import 'package:masjidadmin/screens/super_admin/create_masjid_screen.dart';
 import 'package:masjidadmin/screens/masjid_admin/edit_details_screen.dart';
 import 'package:masjidadmin/screens/masjid_admin/edit_location_screen.dart';
 import 'package:masjidadmin/screens/masjid_admin/namaz_timings_screen.dart';
+import 'package:masjidadmin/services/app_config_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -26,6 +27,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic> _prayerTimingsV2 = {};
   bool _masjidExists = false;
   bool _isLoadingData = true;
+  List<ToolConfig> _enabledTools = [];
+  String? _userType;
 
   StreamSubscription? _masjidSubscription;
   StreamSubscription? _adminSubscription;
@@ -35,9 +38,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     if (_userId != null) {
       _fetchData();
+      _fetchToolSettings();
     } else {
       setState(() => _isLoadingData = false);
     }
+  }
+
+  void _fetchToolSettings() {
+    AppConfigService.getToolConfigStream().listen((tools) {
+      if (mounted) {
+        setState(() {
+          _enabledTools = tools.where((t) => t.isEnabled).toList();
+        });
+      }
+    });
   }
 
   @override
@@ -54,7 +68,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       
       if (adminSnapshot.exists) {
         final adminData = adminSnapshot.data()!;
-        setState(() => _adminName = adminData['displayName'] ?? 'Admin');
+        setState(() {
+          _adminName = adminData['displayName'] ?? 'Admin';
+          _userType = adminData['type'];
+        });
         
         final masjidId = adminData['masjidId'];
         if (masjidId != null) {
@@ -162,7 +179,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
       child: Column(
         children: [
-          _buildActionCards(theme),
+          if (_userType == 'masjidAdmin' || _userType == 'super_admin') 
+            _buildActionCards(theme),
+          if (_enabledTools.isNotEmpty) ...[
+            const SizedBox(height: 25),
+            _buildToolsGrid(theme),
+          ],
           const SizedBox(height: 25),
           _buildTimingsCard(theme),
           const SizedBox(height: 25),
@@ -170,6 +192,97 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildToolsGrid(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 8, bottom: 12),
+          child: Text(
+            'Quick Tools',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+        ),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 15,
+            mainAxisSpacing: 15,
+            childAspectRatio: 2.5,
+          ),
+          itemCount: _enabledTools.length,
+          itemBuilder: (context, index) {
+            final tool = _enabledTools[index];
+            return _buildToolCard(theme, tool);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildToolCard(ThemeData theme, ToolConfig tool) {
+    return InkWell(
+      onTap: () {
+        // Handle tool tap
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${tool.label} coming soon!"))
+        );
+      },
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _getIconForTool(tool.id),
+                color: theme.primaryColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                tool.label,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getIconForTool(String id) {
+    switch (id) {
+      case 'kaza_namaz': return Icons.calculate_rounded;
+      case 'tasbeeh': return Icons.vibration_rounded;
+      case 'qibla': return Icons.explore_rounded;
+      case 'kids': return Icons.child_care_rounded;
+      default: return Icons.build_rounded;
+    }
   }
 
   Widget _buildActionCards(ThemeData theme) {
